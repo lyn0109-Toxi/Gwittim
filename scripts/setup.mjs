@@ -23,7 +23,7 @@ try {
 } catch {
   await copyFile(examplePath, envPath);
   console.log("Created .env from .env.example.");
-  console.log("Add your OPENAI_API_KEY to .env before starting realtime interpretation.");
+  console.log("Add your GEMINI_API_KEY to .env before starting realtime interpretation.");
 }
 
 function mergeMissingEnvValues(envText, exampleText) {

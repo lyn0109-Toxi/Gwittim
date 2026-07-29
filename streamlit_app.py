@@ -6,7 +6,7 @@ import streamlit as st
 
 
 APP_TITLE = "Gwittim"
-DEFAULT_MODEL = "gpt-5.6-luna"
+DEFAULT_MODEL = "gemini-3.6-flash"
 
 
 st.set_page_config(
@@ -36,62 +36,58 @@ def secret_value(name, fallback=""):
         return os.getenv(name, fallback)
 
 
+def normalize_model_name(model):
+    return model.strip().removeprefix("models/")
+
+
 def get_settings():
-    configured_key = secret_value("OPENAI_API_KEY", "")
-    model = secret_value("OPENAI_MODEL", os.getenv("OPENAI_MODEL", DEFAULT_MODEL))
-    reasoning_effort = secret_value(
-        "OPENAI_REASONING_EFFORT", os.getenv("OPENAI_REASONING_EFFORT", "none")
+    configured_key = secret_value("GEMINI_API_KEY", "")
+    model = secret_value("GEMINI_TEXT_MODEL", os.getenv("GEMINI_TEXT_MODEL", DEFAULT_MODEL))
+    translation_target = secret_value(
+        "GEMINI_TRANSLATION_TARGET", os.getenv("GEMINI_TRANSLATION_TARGET", "ko")
     )
 
     with st.sidebar:
         st.markdown("### Session")
-        st.caption("Streamlit Cloud에서는 Settings > Secrets에 API 키를 넣으면 됩니다.")
+        st.caption("Streamlit Cloud에서는 Settings > Secrets에 Gemini API 키를 넣으면 됩니다.")
         entered_key = st.text_input(
-            "OpenAI API key",
+            "Gemini API key",
             value="",
             type="password",
-            placeholder="sk-...",
+            placeholder="AIza...",
             help="Secrets에 키가 없을 때만 임시로 입력하세요.",
         )
         selected_model = st.text_input("Model", value=model)
-        selected_effort = st.selectbox(
-            "Reasoning effort",
-            options=["none", "low", "medium", "high", "xhigh", "max"],
-            index=["none", "low", "medium", "high", "xhigh", "max"].index(
-                reasoning_effort if reasoning_effort in ["none", "low", "medium", "high", "xhigh", "max"] else "none"
-            ),
-        )
+        selected_target = st.text_input("Translation target", value=translation_target)
         save_audio = st.toggle("Store raw audio", value=False, disabled=True)
         st.caption("현재 Streamlit 데모는 원본 오디오를 저장하지 않습니다.")
 
     return {
         "api_key": entered_key or configured_key,
         "key_from_secret": bool(configured_key),
-        "model": selected_model.strip() or DEFAULT_MODEL,
-        "reasoning_effort": selected_effort,
+        "model": normalize_model_name(selected_model) or DEFAULT_MODEL,
+        "translation_target": selected_target.strip() or "ko",
         "save_audio": save_audio,
     }
 
 
-def call_openai(settings, instructions, input_text, max_output_tokens=360):
+def call_gemini(settings, instructions, input_text, max_output_tokens=360):
     if not settings["api_key"]:
-        raise RuntimeError("OPENAI_API_KEY가 필요합니다. Streamlit Secrets 또는 사이드바에 입력해주세요.")
+        raise RuntimeError("GEMINI_API_KEY가 필요합니다. Streamlit Secrets 또는 사이드바에 입력해주세요.")
 
     payload = {
-        "model": settings["model"],
-        "instructions": instructions,
-        "input": input_text,
-        "store": False,
-        "max_output_tokens": max_output_tokens,
+        "systemInstruction": {"parts": [{"text": instructions}]},
+        "contents": [{"role": "user", "parts": [{"text": input_text}]}],
+        "generationConfig": {
+            "maxOutputTokens": max_output_tokens,
+            "temperature": 0.25,
+        },
     }
 
-    if settings["reasoning_effort"] and settings["reasoning_effort"] != "none":
-        payload["reasoning"] = {"effort": settings["reasoning_effort"]}
-
     response = requests.post(
-        "https://api.openai.com/v1/responses",
+        f"https://generativelanguage.googleapis.com/v1beta/models/{normalize_model_name(settings['model'])}:generateContent",
         headers={
-            "Authorization": f"Bearer {settings['api_key']}",
+            "x-goog-api-key": settings["api_key"],
             "Content-Type": "application/json",
         },
         json=payload,
@@ -103,12 +99,9 @@ def call_openai(settings, instructions, input_text, max_output_tokens=360):
         message = data.get("error", {}).get("message") or data.get("message") or response.text
         raise RuntimeError(message)
 
-    if isinstance(data.get("output_text"), str):
-        return data["output_text"].strip()
-
     parts = []
-    for item in data.get("output", []):
-        for content in item.get("content", []):
+    for candidate in data.get("candidates", []):
+        for content in candidate.get("content", {}).get("parts", []):
             text = content.get("text")
             if isinstance(text, str):
                 parts.append(text)
@@ -138,7 +131,7 @@ def translate(settings, english_text):
         ]
         if part
     )
-    return call_openai(settings, instructions, input_text, max_output_tokens=220)
+    return call_gemini(settings, instructions, input_text, max_output_tokens=220)
 
 
 def summarize(settings):
@@ -151,7 +144,7 @@ def summarize(settings):
         "conversation in Korean for a user who is listening live. Keep it short, "
         "concrete, and useful. Use compact bullets. Include decisions and action items only if present."
     )
-    return call_openai(settings, instructions, transcript, max_output_tokens=380)
+    return call_gemini(settings, instructions, transcript, max_output_tokens=380)
 
 
 def compose_reply(settings, korean_draft, mode):
@@ -170,7 +163,7 @@ def compose_reply(settings, korean_draft, mode):
         ]
         if part
     )
-    return call_openai(settings, instructions, input_text, max_output_tokens=420)
+    return call_gemini(settings, instructions, input_text, max_output_tokens=420)
 
 
 def add_segment(english, korean):
@@ -193,7 +186,7 @@ def render_header(settings):
         st.write("영어 대화를 한국어로 따라가고, 필요한 답변을 영어로 다듬는 배포용 미리보기입니다.")
     with right:
         if settings["api_key"]:
-            st.success("API ready")
+            st.success("Gemini ready")
         else:
             st.error("API key required")
         st.caption(f"Model: {settings['model']}")

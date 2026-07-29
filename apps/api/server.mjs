@@ -14,13 +14,13 @@ loadDotEnv(path.join(repoRoot, ".env"));
 const config = {
   host: process.env.HOST || "127.0.0.1",
   port: Number(process.env.PORT || 3000),
-  model: process.env.OPENAI_MODEL || "gpt-5.6-luna",
-  realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-translate",
-  transcriptionModel:
-    process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-realtime-whisper",
-  translationTarget: process.env.OPENAI_TRANSLATION_TARGET || "ko",
-  reasoningEffort: process.env.OPENAI_REASONING_EFFORT || "none",
-  apiKey: process.env.OPENAI_API_KEY || "",
+  apiVersion: process.env.GEMINI_API_VERSION || "v1beta",
+  geminiApiKey: process.env.GEMINI_API_KEY || "",
+  geminiLiveModel:
+    process.env.GEMINI_LIVE_MODEL || "gemini-3.5-live-translate-preview",
+  geminiTextModel: process.env.GEMINI_TEXT_MODEL || "gemini-3.6-flash",
+  translationTarget: process.env.GEMINI_TRANSLATION_TARGET || "ko",
+  echoTargetLanguage: parseBoolean(process.env.GEMINI_ECHO_TARGET_LANGUAGE, false),
 };
 
 const mimeTypes = new Map([
@@ -38,12 +38,15 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "GET" && url.pathname === "/api/config") {
       return sendJson(response, 200, {
-        keyConfigured: Boolean(config.apiKey),
-        model: config.model,
-        realtimeModel: config.realtimeModel,
-        transcriptionModel: config.transcriptionModel,
+        provider: "gemini",
+        keyConfigured: Boolean(config.geminiApiKey),
+        apiVersion: config.apiVersion,
+        geminiLiveModel: modelId(config.geminiLiveModel),
+        geminiTextModel: modelId(config.geminiTextModel),
         translationTarget: config.translationTarget,
-        reasoningEffort: config.reasoningEffort,
+        echoTargetLanguage: config.echoTargetLanguage,
+        inputSampleRate: 16000,
+        outputSampleRate: 24000,
       });
     }
 
@@ -63,11 +66,8 @@ const server = createServer(async (request, response) => {
       return handleCompose(request, response);
     }
 
-    if (
-      request.method === "POST" &&
-      url.pathname === "/api/realtime/translation-session"
-    ) {
-      return handleTranslationSession(request, response);
+    if (request.method === "POST" && url.pathname === "/api/gemini/live-token") {
+      return handleGeminiLiveToken(request, response);
     }
 
     if (request.method === "GET") {
@@ -102,8 +102,8 @@ async function handleTranslate(request, response) {
     .map((item) => `EN: ${item.english || ""}\nKO: ${item.korean || ""}`)
     .join("\n\n");
 
-  const translated = await callOpenAI({
-    instructions: [
+  const translated = await callGemini({
+    systemInstruction: [
       "You are Gwittim, a quiet realtime English-to-Korean conversation assistant.",
       "Translate live English speech into natural Korean subtitles.",
       "Return only Korean text.",
@@ -122,63 +122,77 @@ async function handleTranslate(request, response) {
   sendJson(response, 200, { translation: translated.trim() });
 }
 
-async function handleTranslationSession(request, response) {
+async function handleGeminiLiveToken(request, response) {
   const body = await readJson(request);
   const targetLanguage = cleanInput(body.targetLanguage || config.translationTarget);
+  const echoTargetLanguage =
+    typeof body.echoTargetLanguage === "boolean"
+      ? body.echoTargetLanguage
+      : config.echoTargetLanguage;
 
-  if (!config.apiKey) {
+  if (!config.geminiApiKey) {
     return sendJson(response, 503, {
-      error: "OPENAI_API_KEY is not configured",
+      error: "GEMINI_API_KEY is not configured",
     });
   }
 
-  if (!isSupportedTranslationTarget(targetLanguage)) {
+  if (!isSafeLanguageCode(targetLanguage)) {
     return sendJson(response, 400, {
       error: `Unsupported translation target: ${targetLanguage}`,
     });
   }
 
-  const openAIResponse = await fetch(
-    "https://api.openai.com/v1/realtime/translations/client_secrets",
+  const setup = createLiveTranslationSetup({
+    targetLanguage,
+    echoTargetLanguage,
+  });
+  const expireTime = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const newSessionExpireTime = new Date(Date.now() + 60 * 1000).toISOString();
+
+  const geminiResponse = await fetch(
+    `https://generativelanguage.googleapis.com/${config.apiVersion}/auth_tokens`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${config.apiKey}`,
+        "x-goog-api-key": config.geminiApiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        session: {
-          model: config.realtimeModel,
-          audio: {
-            input: {
-              transcription: { model: config.transcriptionModel },
-              noise_reduction: { type: "near_field" },
-            },
-            output: { language: targetLanguage },
-          },
+        uses: 1,
+        expireTime,
+        newSessionExpireTime,
+        liveConnectConstraints: {
+          model: normalizeModelName(config.geminiLiveModel),
+          config: setup.setup.generationConfig,
         },
       }),
     },
   );
 
-  const data = await openAIResponse.json().catch(() => ({}));
+  const { data, rawText } = await readResponse(geminiResponse);
 
-  if (!openAIResponse.ok) {
-    const message = parseOpenAIError(JSON.stringify(data), openAIResponse.status);
-    const error = new Error(message);
-    error.statusCode = openAIResponse.status;
+  if (!geminiResponse.ok) {
+    const error = new Error(parseGeminiError(data, rawText, geminiResponse.status));
+    error.statusCode = geminiResponse.status;
     throw error;
   }
 
-  const clientSecret =
-    typeof data.client_secret === "string"
-      ? data.client_secret
-      : data.client_secret?.value || data.value;
+  const token = extractGeminiToken(data);
+  if (!token) {
+    const error = new Error("Gemini did not return an ephemeral Live API token");
+    error.statusCode = 502;
+    throw error;
+  }
 
   sendJson(response, 200, {
-    ...data,
-    client_secret: clientSecret,
+    token,
+    setup,
     targetLanguage,
+    echoTargetLanguage,
+    expireTime,
+    newSessionExpireTime,
+    webSocketEndpoint:
+      "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
   });
 }
 
@@ -198,8 +212,8 @@ async function handleSummarize(request, response) {
     })
     .join("\n");
 
-  const summary = await callOpenAI({
-    instructions: [
+  const summary = await callGemini({
+    systemInstruction: [
       "You are Gwittim, a realtime meeting brief assistant.",
       "Summarize the current conversation in Korean for a user who is listening live.",
       "Keep it short, concrete, and useful while the conversation is still happening.",
@@ -226,8 +240,8 @@ async function handleCompose(request, response) {
     .map((item) => `EN: ${item.english || ""}\nKO: ${item.korean || ""}`)
     .join("\n\n");
 
-  const suggestion = await callOpenAI({
-    instructions: [
+  const suggestion = await callGemini({
+    systemInstruction: [
       "You are Gwittim, helping a Korean speaker respond naturally in an English conversation.",
       "Convert the user's Korean draft into concise, spoken English.",
       "Match the requested response mode.",
@@ -247,99 +261,141 @@ async function handleCompose(request, response) {
   sendJson(response, 200, { suggestion: suggestion.trim() });
 }
 
-async function callOpenAI({ instructions, input, maxOutputTokens }) {
-  if (!config.apiKey) {
-    const error = new Error("OPENAI_API_KEY is not configured");
+async function callGemini({ systemInstruction, input, maxOutputTokens }) {
+  if (!config.geminiApiKey) {
+    const error = new Error("GEMINI_API_KEY is not configured");
     error.statusCode = 503;
     throw error;
   }
 
-  const payload = {
-    model: config.model,
-    instructions,
-    input,
-    store: false,
-    max_output_tokens: maxOutputTokens,
-  };
-
-  if (config.reasoningEffort && config.reasoningEffort !== "none") {
-    payload.reasoning = { effort: config.reasoningEffort };
-  }
-
-  const openAIResponse = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      "Content-Type": "application/json",
+  const modelName = normalizeModelName(config.geminiTextModel);
+  const geminiResponse = await fetch(
+    `https://generativelanguage.googleapis.com/${config.apiVersion}/${modelName}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": config.geminiApiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemInstruction }],
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: input }],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens,
+          temperature: 0.25,
+        },
+      }),
     },
-    body: JSON.stringify(payload),
-  });
+  );
 
-  const data = await openAIResponse.json().catch(() => ({}));
+  const { data, rawText } = await readResponse(geminiResponse);
 
-  if (!openAIResponse.ok) {
-    const message =
-      data?.error?.message ||
-      data?.message ||
-      `OpenAI request failed with status ${openAIResponse.status}`;
-    const error = new Error(message);
-    error.statusCode = openAIResponse.status;
+  if (!geminiResponse.ok) {
+    const error = new Error(parseGeminiError(data, rawText, geminiResponse.status));
+    error.statusCode = geminiResponse.status;
     throw error;
   }
 
-  const text = extractOutputText(data);
+  const text = extractGeminiText(data);
   if (!text) {
-    throw new Error("OpenAI returned no text output");
+    throw new Error("Gemini returned no text output");
   }
 
   return text;
 }
 
-function parseOpenAIError(rawText, statusCode) {
-  try {
-    const data = JSON.parse(rawText);
-    return (
-      data?.error?.message ||
-      data?.message ||
-      `OpenAI realtime request failed with status ${statusCode}`
-    );
-  } catch {
-    return rawText || `OpenAI realtime request failed with status ${statusCode}`;
-  }
+function createLiveTranslationSetup({ targetLanguage, echoTargetLanguage }) {
+  return {
+    setup: {
+      model: normalizeModelName(config.geminiLiveModel),
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+        translationConfig: {
+          targetLanguageCode: targetLanguage,
+          echoTargetLanguage,
+        },
+      },
+    },
+  };
 }
 
-function isSupportedTranslationTarget(language) {
-  return new Set([
-    "es",
-    "pt",
-    "fr",
-    "ja",
-    "ru",
-    "zh",
-    "de",
-    "ko",
-    "hi",
-    "id",
-    "vi",
-    "it",
-    "en",
-  ]).has(language);
+function extractGeminiToken(data) {
+  if (typeof data?.name === "string") {
+    return data.name;
+  }
+  if (typeof data?.token === "string") {
+    return data.token;
+  }
+  if (typeof data?.token?.name === "string") {
+    return data.token.name;
+  }
+  if (typeof data?.value === "string") {
+    return data.value;
+  }
+  return "";
 }
 
-function extractOutputText(data) {
-  if (typeof data?.output_text === "string") {
-    return data.output_text;
-  }
-
+function extractGeminiText(data) {
   const parts = [];
-  for (const item of data?.output || []) {
-    for (const content of item?.content || []) {
-      if (typeof content?.text === "string") {
-        parts.push(content.text);
+  for (const candidate of data?.candidates || []) {
+    for (const part of candidate?.content?.parts || []) {
+      if (typeof part?.text === "string") {
+        parts.push(part.text);
       }
     }
   }
   return parts.join("\n").trim();
+}
+
+function parseGeminiError(data, rawText, statusCode) {
+  return (
+    data?.error?.message ||
+    data?.message ||
+    rawText ||
+    `Gemini request failed with status ${statusCode}`
+  );
+}
+
+async function readResponse(response) {
+  const rawText = await response.text();
+  if (!rawText) {
+    return { data: {}, rawText: "" };
+  }
+
+  try {
+    return { data: JSON.parse(rawText), rawText };
+  } catch {
+    return { data: {}, rawText };
+  }
+}
+
+function normalizeModelName(model) {
+  const value = modelId(model);
+  return `models/${value}`;
+}
+
+function modelId(model) {
+  return cleanInput(model).replace(/^models\//, "");
+}
+
+function isSafeLanguageCode(language) {
+  return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(language);
+}
+
+function parseBoolean(value, fallback) {
+  if (value === undefined) {
+    return fallback;
+  }
+  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
 }
 
 async function serveStatic(urlPath, response) {

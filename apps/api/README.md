@@ -5,9 +5,9 @@ This app hosts the local MVP backend for realtime interpretation, summaries, res
 Current responsibilities:
 
 - Serve `apps/web` at `http://localhost:3000`.
-- Create short-lived OpenAI Realtime Translation client secrets without exposing the API key to the browser.
+- Create short-lived Gemini Live API tokens without exposing the API key to the browser.
 - Accept transcript text from the browser MVP.
-- Translate English into Korean through the OpenAI Responses API.
+- Translate English into Korean through Gemini `generateContent`.
 - Generate live Korean summaries.
 - Compose natural English responses from Korean drafts.
 

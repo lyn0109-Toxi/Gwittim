@@ -11,7 +11,7 @@
 ## Phase 1: Realtime Interpretation Prototype
 
 - Microphone capture.
-- Realtime audio streaming through WebRTC.
+- Realtime audio streaming through Gemini Live API WebSocket.
 - English transcription events.
 - English-to-Korean interpretation events.
 - Subtitle-style UI.

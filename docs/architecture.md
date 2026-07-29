@@ -4,8 +4,8 @@
 
 ```text
 Audio input
-  -> browser WebRTC connection
-  -> OpenAI Realtime API
+  -> browser Web Audio 16 kHz PCM stream
+  -> Gemini Live API WebSocket
   -> English transcription event stream
   -> Korean interpretation stream
   -> live subtitle UI
@@ -23,7 +23,8 @@ Responsibilities:
 
 - Ask for microphone permission.
 - Capture microphone audio.
-- Stream microphone audio through WebRTC.
+- Convert microphone audio to 16 kHz PCM chunks.
+- Stream microphone audio through Gemini Live API WebSocket.
 - Render partial and final transcript events.
 - Render Korean translations as subtitles.
 - Provide a small input box for Korean-to-English response drafting.
@@ -34,13 +35,13 @@ Responsibilities:
 Responsibilities:
 
 - Serve the browser MVP.
-- Create short-lived Realtime Translation client secrets while keeping the OpenAI API key server-side.
+- Create short-lived Gemini Live API tokens while keeping the Gemini API key server-side.
 - Accept final transcript segments.
 - Translate stable transcript segments.
 - Maintain short session context for better translation.
 - Generate live summaries and post-session notes.
 
-The current MVP uses OpenAI Realtime API WebRTC for microphone interpretation and simple HTTP JSON endpoints for summaries and response drafting. A later desktop version should add system audio capture where platform permissions allow it.
+The current MVP uses Gemini Live API WebSocket for microphone interpretation and simple HTTP JSON endpoints for summaries and response drafting. A later desktop version should add system audio capture where platform permissions allow it.
 
 ### Shared Realtime Protocol
 

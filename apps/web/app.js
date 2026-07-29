@@ -1,7 +1,17 @@
+const INPUT_SAMPLE_RATE = 16000;
+const DEFAULT_OUTPUT_SAMPLE_RATE = 24000;
+const INPUT_MIME_TYPE = `audio/pcm;rate=${INPUT_SAMPLE_RATE}`;
+
 const state = {
-  peerConnection: null,
-  dataChannel: null,
+  socket: null,
   localStream: null,
+  audioContext: null,
+  inputSource: null,
+  inputProcessor: null,
+  outputGain: null,
+  outputNodes: [],
+  nextOutputTime: 0,
+  socketClosedByUser: false,
   listening: false,
   selectedMode: "neutral",
   segments: [],
@@ -56,7 +66,9 @@ function bindEvents() {
     }
   });
 
-  elements.stopButton.addEventListener("click", stopRealtimeInterpretation);
+  elements.stopButton.addEventListener("click", () => {
+    stopRealtimeInterpretation();
+  });
   elements.composeButton.addEventListener("click", composeResponse);
   elements.clearButton.addEventListener("click", clearSession);
 
@@ -73,14 +85,15 @@ async function loadConfig() {
   try {
     const config = await requestJson("/api/config");
     state.config = config;
-    elements.modelName.textContent = config.realtimeModel || config.model || "-";
+    elements.modelName.textContent =
+      config.geminiLiveModel || config.realtimeModel || config.model || "-";
 
     if (config.keyConfigured) {
       setStatus("통역 준비됨", "ready");
     } else {
-      setStatus("API 키 필요", "error");
+      setStatus("Gemini API 키 필요", "error");
       elements.summaryBox.textContent =
-        ".env 파일에 OPENAI_API_KEY를 설정하면 실시간 통역이 동작합니다.";
+        ".env 파일에 GEMINI_API_KEY를 설정하면 실시간 통역이 동작합니다.";
     }
   } catch (error) {
     setStatus("서버 연결 실패", "error");
@@ -89,14 +102,16 @@ async function loadConfig() {
 }
 
 function updateRuntimeSupport() {
-  elements.speechSupport.textContent = canUseRealtime() ? "WebRTC 통역" : "미지원";
+  elements.speechSupport.textContent = canUseRealtime()
+    ? "Gemini Live 통역"
+    : "미지원";
 }
 
 function canUseRealtime() {
   return Boolean(
     navigator.mediaDevices?.getUserMedia &&
-      window.RTCPeerConnection &&
-      window.RTCSessionDescription,
+      window.WebSocket &&
+      (window.AudioContext || window.webkitAudioContext),
   );
 }
 
@@ -106,7 +121,7 @@ async function startRealtimeInterpretation() {
   }
 
   if (!state.config?.keyConfigured) {
-    showError("OPENAI_API_KEY를 먼저 설정해주세요.");
+    showError("GEMINI_API_KEY를 먼저 설정해주세요.");
     return;
   }
 
@@ -126,83 +141,59 @@ async function startRealtimeInterpretation() {
         autoGainControl: true,
       },
     });
-
-    const peerConnection = new RTCPeerConnection();
-    const dataChannel = peerConnection.createDataChannel("oai-events");
-
-    peerConnection.addEventListener("track", (event) => {
-      const [remoteStream] = event.streams;
-      if (remoteStream) {
-        elements.translatedAudio.srcObject = remoteStream;
-        void elements.translatedAudio.play().catch(() => {});
-      }
-    });
-
-    stream.getAudioTracks().forEach((track) => {
-      peerConnection.addTrack(track, stream);
-    });
-
-    dataChannel.addEventListener("open", () => {
-      state.listening = true;
-      setStatus("실시간 연결됨", "ready");
-      setListening("듣는 중", "live");
-      elements.englishInterim.textContent = "말하는 동안 영어 전사와 한국어 통역이 표시됩니다.";
-    });
-
-    dataChannel.addEventListener("message", (event) => {
-      handleRealtimeEvent(event.data);
-    });
-
-    dataChannel.addEventListener("close", () => {
-      if (state.listening) {
-        stopRealtimeInterpretation();
-      }
-    });
-
-    peerConnection.addEventListener("connectionstatechange", () => {
-      if (["failed", "disconnected", "closed"].includes(peerConnection.connectionState)) {
-        if (state.listening) {
-          stopRealtimeInterpretation();
-        }
-      }
-    });
-
-    state.peerConnection = peerConnection;
-    state.dataChannel = dataChannel;
     state.localStream = stream;
 
-    const session = await requestJson("/api/realtime/translation-session", {
+    const session = await requestJson("/api/gemini/live-token", {
       method: "POST",
-      body: JSON.stringify({ targetLanguage: state.config.translationTarget || "ko" }),
+      body: JSON.stringify({
+        targetLanguage: state.config.translationTarget || "ko",
+      }),
     });
 
-    if (!session.client_secret) {
-      throw new Error("실시간 통역 세션 키를 받지 못했습니다.");
+    if (!session.token || !session.webSocketEndpoint || !session.setup) {
+      throw new Error("Gemini 실시간 통역 세션 키를 받지 못했습니다.");
     }
 
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
+    const audioContext = createAudioContext();
+    state.audioContext = audioContext;
+    state.outputGain = audioContext.createGain();
+    state.outputGain.connect(audioContext.destination);
+    state.nextOutputTime = audioContext.currentTime + 0.05;
+    await audioContext.resume();
 
-    const sdpResponse = await fetch(
-      "https://api.openai.com/v1/realtime/translations/calls",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.client_secret}`,
-          "Content-Type": "application/sdp",
-        },
-        body: offer.sdp,
-      },
-    );
+    const socket = new WebSocket(createGeminiWebSocketUrl(session));
+    state.socket = socket;
+    state.socketClosedByUser = false;
 
-    if (!sdpResponse.ok) {
-      throw new Error(await readOpenAIRealtimeError(sdpResponse));
-    }
-
-    await peerConnection.setRemoteDescription({
-      type: "answer",
-      sdp: await sdpResponse.text(),
+    socket.addEventListener("message", (event) => {
+      void handleGeminiMessage(event.data);
     });
+    socket.addEventListener("error", () => {
+      if (!state.socketClosedByUser) {
+        setStatus("통역 오류", "error");
+        showError("Gemini Live 연결 중 오류가 발생했습니다.");
+      }
+    });
+    socket.addEventListener("close", (event) => {
+      const wasListening = state.listening;
+      const closedByUser = state.socketClosedByUser;
+      stopRealtimeInterpretation({ fromSocketClose: true });
+
+      if (wasListening && !closedByUser) {
+        setStatus("연결 종료", "error");
+        const reason = event.reason ? ` ${event.reason}` : "";
+        showError(`Gemini Live 연결이 종료되었습니다.${reason}`);
+      }
+    });
+
+    await waitForSocketOpen(socket, session.setup);
+
+    state.listening = true;
+    startMicrophoneStreaming(stream);
+    setStatus("실시간 연결됨", "ready");
+    setListening("듣는 중", "live");
+    elements.englishInterim.textContent =
+      "말하는 동안 영어 전사와 한국어 통역이 표시됩니다.";
   } catch (error) {
     stopRealtimeInterpretation();
     setStatus("연결 실패", "error");
@@ -211,33 +202,48 @@ async function startRealtimeInterpretation() {
   }
 }
 
-function stopRealtimeInterpretation() {
+function stopRealtimeInterpretation(options = {}) {
+  const socket = state.socket;
   state.listening = false;
+  state.socketClosedByUser = true;
 
-  if (state.dataChannel && state.dataChannel.readyState === "open") {
-    state.dataChannel.close();
+  if (!options.fromSocketClose && socket && socket.readyState < WebSocket.CLOSING) {
+    if (socket.readyState === WebSocket.OPEN) {
+      try {
+        socket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+      } catch {
+        // The socket may already be closing; cleanup below still handles local state.
+      }
+    }
+    socket.close();
   }
 
-  if (state.peerConnection) {
-    state.peerConnection.close();
-  }
+  stopMicrophoneStreaming();
+  stopOutputPlayback();
 
   if (state.localStream) {
     state.localStream.getTracks().forEach((track) => track.stop());
   }
 
-  state.dataChannel = null;
-  state.peerConnection = null;
+  if (state.audioContext && state.audioContext.state !== "closed") {
+    void state.audioContext.close().catch(() => {});
+  }
+
+  state.socket = null;
   state.localStream = null;
+  state.audioContext = null;
+  state.outputGain = null;
+  state.nextOutputTime = 0;
   state.activeInputTranscript = "";
   state.activeOutputTranscript = "";
   clearFinalizeTimer();
+  elements.translatedAudio.removeAttribute("src");
   elements.translatedAudio.srcObject = null;
   elements.startButton.disabled = false;
   elements.stopButton.disabled = true;
   setListening("대기", "idle");
 
-  if (state.config?.keyConfigured) {
+  if (state.config?.keyConfigured && !options.fromSocketClose) {
     setStatus("통역 준비됨", "ready");
   }
 }
@@ -245,52 +251,262 @@ function stopRealtimeInterpretation() {
 function resetRealtimeState() {
   state.activeInputTranscript = "";
   state.activeOutputTranscript = "";
+  state.lastFinalizedKorean = "";
   clearFinalizeTimer();
+  stopOutputPlayback();
 }
 
-function handleRealtimeEvent(rawData) {
-  let event;
+function createAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  return new AudioContextClass();
+}
+
+function createGeminiWebSocketUrl(session) {
+  return `${session.webSocketEndpoint}?access_token=${encodeURIComponent(
+    session.token,
+  )}`;
+}
+
+function waitForSocketOpen(socket, setup) {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error("Gemini Live 연결 시간이 초과되었습니다."));
+    }, 12000);
+
+    socket.addEventListener(
+      "open",
+      () => {
+        window.clearTimeout(timeout);
+        socket.send(JSON.stringify(setup));
+        resolve();
+      },
+      { once: true },
+    );
+
+    socket.addEventListener(
+      "error",
+      () => {
+        window.clearTimeout(timeout);
+        reject(new Error("Gemini Live 연결을 열지 못했습니다."));
+      },
+      { once: true },
+    );
+
+    socket.addEventListener(
+      "close",
+      () => {
+        window.clearTimeout(timeout);
+        reject(new Error("Gemini Live 연결이 시작 전에 닫혔습니다."));
+      },
+      { once: true },
+    );
+  });
+}
+
+function startMicrophoneStreaming(stream) {
+  const audioContext = state.audioContext;
+  const socket = state.socket;
+
+  if (!audioContext || !socket) {
+    return;
+  }
+
+  const source = audioContext.createMediaStreamSource(stream);
+  const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+  processor.onaudioprocess = (event) => {
+    const output = event.outputBuffer.getChannelData(0);
+    output.fill(0);
+
+    if (!state.listening || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const input = event.inputBuffer.getChannelData(0);
+    const pcmBuffer = resampleFloat32ToPCM16(
+      input,
+      audioContext.sampleRate,
+      INPUT_SAMPLE_RATE,
+    );
+
+    if (pcmBuffer.byteLength > 0) {
+      sendGeminiAudio(pcmBuffer);
+    }
+  };
+
+  source.connect(processor);
+  processor.connect(audioContext.destination);
+  state.inputSource = source;
+  state.inputProcessor = processor;
+}
+
+function stopMicrophoneStreaming() {
+  if (state.inputProcessor) {
+    state.inputProcessor.onaudioprocess = null;
+    state.inputProcessor.disconnect();
+  }
+
+  if (state.inputSource) {
+    state.inputSource.disconnect();
+  }
+
+  state.inputProcessor = null;
+  state.inputSource = null;
+}
+
+function sendGeminiAudio(arrayBuffer) {
+  const socket = state.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  socket.send(
+    JSON.stringify({
+      realtimeInput: {
+        audio: {
+          data: arrayBufferToBase64(arrayBuffer),
+          mimeType: INPUT_MIME_TYPE,
+        },
+      },
+    }),
+  );
+}
+
+async function handleGeminiMessage(rawData) {
+  const rawText = typeof rawData === "string" ? rawData : await rawData.text();
+  let message;
+
   try {
-    event = JSON.parse(rawData);
+    message = JSON.parse(rawText);
   } catch {
     return;
   }
 
-  if (event.type === "error") {
-    const message = event.error?.message || "실시간 통역 중 오류가 발생했습니다.";
+  if (message.error) {
+    const errorMessage =
+      message.error.message || "Gemini Live 통역 중 오류가 발생했습니다.";
     setStatus("통역 오류", "error");
-    showError(message);
+    showError(errorMessage);
     return;
   }
 
-  if (event.type === "session.input_transcript.delta") {
-    state.activeInputTranscript += event.delta || "";
+  if (message.setupComplete) {
+    setStatus("통역 세션 준비됨", "ready");
+  }
+
+  if (message.goAway?.timeLeft) {
+    setStatus("세션 만료 예정", "error");
+  }
+
+  const serverContent = message.serverContent;
+  if (!serverContent) {
+    return;
+  }
+
+  if (serverContent.interrupted) {
+    stopOutputPlayback();
+    clearFinalizeTimer();
+  }
+
+  const inputText = serverContent.inputTranscription?.text;
+  if (inputText) {
+    state.activeInputTranscript = mergeTranscript(
+      state.activeInputTranscript,
+      inputText,
+    );
     elements.englishInterim.textContent =
       state.activeInputTranscript || "음성을 인식하는 중...";
-    return;
   }
 
-  if (event.type === "session.output_transcript.delta") {
-    state.activeOutputTranscript += event.delta || "";
-    elements.koreanSubtitle.textContent = state.activeOutputTranscript || "통역 중...";
+  const outputText = serverContent.outputTranscription?.text;
+  if (outputText) {
+    state.activeOutputTranscript = mergeTranscript(
+      state.activeOutputTranscript,
+      outputText,
+    );
+    elements.koreanSubtitle.textContent =
+      state.activeOutputTranscript || "통역 중...";
     scheduleRealtimeSegmentFinalize();
-    return;
   }
 
-  if (event.type === "session.input_transcript.done" && event.transcript) {
-    state.activeInputTranscript = event.transcript;
-    elements.englishInterim.textContent = event.transcript;
-    return;
+  for (const part of serverContent.modelTurn?.parts || []) {
+    const inlineData = part.inlineData;
+    if (inlineData?.data) {
+      playGeminiAudioChunk(inlineData.data, inlineData.mimeType);
+    }
   }
 
-  if (event.type === "session.output_transcript.done") {
+  if (serverContent.turnComplete) {
     clearFinalizeTimer();
-    finalizeRealtimeSegment(event.transcript || state.activeOutputTranscript);
+    finalizeRealtimeSegment(state.activeOutputTranscript);
+  }
+}
+
+function mergeTranscript(current, incoming) {
+  const text = String(incoming || "");
+  if (!text) {
+    return current;
+  }
+  if (!current) {
+    return text;
+  }
+  if (text.startsWith(current)) {
+    return text;
+  }
+  if (current.endsWith(text)) {
+    return current;
+  }
+  return `${current}${text}`;
+}
+
+function playGeminiAudioChunk(base64Audio, mimeType = "") {
+  const audioContext = state.audioContext;
+  if (!audioContext) {
     return;
   }
 
-  if (event.type === "session.updated") {
-    setStatus("통역 세션 준비됨", "ready");
+  const samples = pcm16Base64ToFloat32(base64Audio);
+  if (samples.length === 0) {
+    return;
+  }
+
+  const sampleRate = parseSampleRate(mimeType) || DEFAULT_OUTPUT_SAMPLE_RATE;
+  const buffer = audioContext.createBuffer(1, samples.length, sampleRate);
+  buffer.copyToChannel(samples, 0);
+
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+  source.connect(state.outputGain || audioContext.destination);
+
+  const startAt = Math.max(
+    audioContext.currentTime + 0.02,
+    state.nextOutputTime || audioContext.currentTime,
+  );
+  source.start(startAt);
+  state.nextOutputTime = startAt + buffer.duration;
+  state.outputNodes.push(source);
+  source.onended = () => {
+    state.outputNodes = state.outputNodes.filter((node) => node !== source);
+    try {
+      source.disconnect();
+    } catch {
+      // Some browsers throw when an already-ended source was disconnected.
+    }
+  };
+}
+
+function stopOutputPlayback() {
+  for (const source of state.outputNodes.splice(0)) {
+    try {
+      source.stop();
+    } catch {
+      // Already stopped sources can be ignored.
+    }
+    source.disconnect();
+  }
+
+  if (state.audioContext) {
+    state.nextOutputTime = state.audioContext.currentTime;
   }
 }
 
@@ -298,12 +514,19 @@ function finalizeRealtimeSegment(text) {
   const korean = (text || state.activeOutputTranscript).trim();
   const english = state.activeInputTranscript.trim() || "음성 인식 중";
 
-  if (!korean || korean === state.lastFinalizedKorean) {
+  if (!korean) {
+    return;
+  }
+
+  if (korean === state.lastFinalizedKorean) {
+    state.activeInputTranscript = "";
+    state.activeOutputTranscript = "";
+    clearFinalizeTimer();
     return;
   }
 
   const segment = {
-    id: crypto.randomUUID(),
+    id: createId(),
     at: new Date(),
     english,
     korean,
@@ -325,7 +548,7 @@ function scheduleRealtimeSegmentFinalize() {
   clearFinalizeTimer();
   state.finalizeTimer = window.setTimeout(() => {
     finalizeRealtimeSegment(state.activeOutputTranscript);
-  }, 900);
+  }, 1100);
 }
 
 function clearFinalizeTimer() {
@@ -421,6 +644,7 @@ function clearSession() {
   state.activeOutputTranscript = "";
   state.lastFinalizedKorean = "";
   clearFinalizeTimer();
+  stopOutputPlayback();
   elements.koreanSubtitle.textContent = "세션을 지웠습니다.";
   elements.englishInterim.textContent = "새 통역을 시작할 수 있습니다.";
   elements.summaryBox.textContent = "대화가 쌓이면 요약이 갱신됩니다.";
@@ -446,14 +670,83 @@ async function requestJson(url, options = {}) {
   return data;
 }
 
-async function readOpenAIRealtimeError(response) {
-  const text = await response.text();
-  try {
-    const data = JSON.parse(text);
-    return data?.error?.message || data?.message || `통역 연결 실패: ${response.status}`;
-  } catch {
-    return text || `통역 연결 실패: ${response.status}`;
+function resampleFloat32ToPCM16(input, inputSampleRate, outputSampleRate) {
+  if (!input.length) {
+    return new ArrayBuffer(0);
   }
+
+  const ratio = inputSampleRate / outputSampleRate;
+  const outputLength = Math.max(1, Math.round(input.length / ratio));
+  const output = new Int16Array(outputLength);
+
+  for (let index = 0; index < outputLength; index += 1) {
+    const start = Math.floor(index * ratio);
+    const end = Math.min(input.length, Math.floor((index + 1) * ratio));
+    let total = 0;
+    let count = 0;
+
+    for (let sampleIndex = start; sampleIndex < end; sampleIndex += 1) {
+      total += input[sampleIndex];
+      count += 1;
+    }
+
+    const sample = clamp(count > 0 ? total / count : input[start] || 0, -1, 1);
+    output[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+  }
+
+  return output.buffer;
+}
+
+function pcm16Base64ToFloat32(base64Audio) {
+  const bytes = base64ToUint8Array(base64Audio);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const samples = new Float32Array(Math.floor(bytes.byteLength / 2));
+
+  for (let index = 0; index < samples.length; index += 1) {
+    samples[index] = view.getInt16(index * 2, true) / 32768;
+  }
+
+  return samples;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+}
+
+function base64ToUint8Array(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function parseSampleRate(mimeType) {
+  const match = String(mimeType).match(/rate=(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function createId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function setStatus(text, tone) {

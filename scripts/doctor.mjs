@@ -21,7 +21,7 @@ for (const check of checks) {
 
 if (failed.length > 0) {
   console.log("");
-  console.log("Run `npm run setup`, then add OPENAI_API_KEY to .env.");
+  console.log("Run `npm run setup`, then add GEMINI_API_KEY to .env.");
   process.exit(1);
 }
 
@@ -53,22 +53,26 @@ async function checkEnv() {
     checks.push({ ok: true, message: ".env exists." });
 
     const settings = parseEnv(envText);
-    const apiKey = settings.OPENAI_API_KEY || "";
+    const apiKey = settings.GEMINI_API_KEY || "";
     checks.push({
       ok: Boolean(apiKey && !apiKey.includes("your_api_key_here")),
-      message: "OPENAI_API_KEY is set in .env.",
+      message: "GEMINI_API_KEY is set in .env.",
     });
     checks.push({
-      ok: settings.OPENAI_REALTIME_MODEL === "gpt-realtime-translate",
-      message: "OPENAI_REALTIME_MODEL is gpt-realtime-translate.",
+      ok: settings.GEMINI_LIVE_MODEL === "gemini-3.5-live-translate-preview",
+      message: "GEMINI_LIVE_MODEL is gemini-3.5-live-translate-preview.",
     });
     checks.push({
-      ok: settings.OPENAI_TRANSCRIPTION_MODEL === "gpt-realtime-whisper",
-      message: "OPENAI_TRANSCRIPTION_MODEL is gpt-realtime-whisper.",
+      ok: settings.GEMINI_TEXT_MODEL === "gemini-3.6-flash",
+      message: "GEMINI_TEXT_MODEL is gemini-3.6-flash.",
     });
     checks.push({
-      ok: settings.OPENAI_TRANSLATION_TARGET === "ko",
-      message: "OPENAI_TRANSLATION_TARGET is ko.",
+      ok: settings.GEMINI_TRANSLATION_TARGET === "ko",
+      message: "GEMINI_TRANSLATION_TARGET is ko.",
+    });
+    checks.push({
+      ok: settings.GEMINI_API_VERSION === "v1beta",
+      message: "GEMINI_API_VERSION is v1beta.",
     });
   } catch {
     checks.push({ ok: false, message: ".env is missing." });

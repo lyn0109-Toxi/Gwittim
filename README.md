@@ -6,7 +6,7 @@ The first product goal is simple: listen to English conversations, translate the
 
 ## Quick Start
 
-Gwittim currently ships as a local browser MVP with a small Node API server and OpenAI Realtime API WebRTC streaming.
+Gwittim currently ships as a local browser MVP with a small Node API server and Gemini Live API WebSocket streaming.
 
 1. Copy the example environment file.
 
@@ -14,17 +14,19 @@ Gwittim currently ships as a local browser MVP with a small Node API server and 
    npm run setup
    ```
 
-2. Add your OpenAI API key to `.env`.
+2. Add your Gemini API key to `.env`.
+
+   You can create or copy a key in [Google AI Studio](https://aistudio.google.com/apikey).
 
    ```bash
    nano .env
    ```
 
    ```text
-   OPENAI_API_KEY=sk-your-real-key-here
-   OPENAI_REALTIME_MODEL=gpt-realtime-translate
-   OPENAI_TRANSCRIPTION_MODEL=gpt-realtime-whisper
-   OPENAI_TRANSLATION_TARGET=ko
+   GEMINI_API_KEY=your-real-gemini-key-here
+   GEMINI_LIVE_MODEL=gemini-3.5-live-translate-preview
+   GEMINI_TEXT_MODEL=gemini-3.6-flash
+   GEMINI_TRANSLATION_TARGET=ko
    ```
 
    Save in `nano` with `Control + O`, press `Enter`, then exit with `Control + X`.
@@ -42,7 +44,7 @@ Gwittim currently ships as a local browser MVP with a small Node API server and 
    http://localhost:3000
    ```
 
-The browser app streams microphone audio through WebRTC, receives English transcription events, and renders Korean interpretation as live subtitles. Chrome is recommended.
+The browser app streams 16 kHz PCM microphone audio to Gemini Live, receives English transcription and Korean interpretation events, and renders Korean interpretation as live subtitles. Chrome is recommended.
 
 For a fuller local checklist, see [Local Run Guide](docs/local-run.md).
 
@@ -58,15 +60,12 @@ Branch: main
 Main file path: streamlit_app.py
 ```
 
-Add your OpenAI key in Streamlit Cloud secrets:
+Add your Gemini key in Streamlit Cloud secrets:
 
 ```toml
-OPENAI_API_KEY = "your_api_key_here"
-OPENAI_MODEL = "gpt-5.6-luna"
-OPENAI_REALTIME_MODEL = "gpt-realtime-translate"
-OPENAI_TRANSCRIPTION_MODEL = "gpt-realtime-whisper"
-OPENAI_TRANSLATION_TARGET = "ko"
-OPENAI_REASONING_EFFORT = "none"
+GEMINI_API_KEY = "your_api_key_here"
+GEMINI_TEXT_MODEL = "gemini-3.6-flash"
+GEMINI_TRANSLATION_TARGET = "ko"
 ```
 
 The Streamlit version is a deployable text-input preview. The local Node version is the realtime microphone interpreter.
@@ -89,7 +88,7 @@ Core experience:
 The first version should prove the real-time loop:
 
 1. Capture live microphone audio.
-2. Stream audio to the Realtime API over WebRTC.
+2. Stream audio to Gemini Live API over WebSocket.
 3. Receive English transcription and Korean interpretation events.
 4. Render Korean subtitle-style output.
 5. Keep a short rolling transcript.
