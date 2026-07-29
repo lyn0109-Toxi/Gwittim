@@ -11,21 +11,28 @@ Gwittim currently ships as a local browser MVP with a small Node API server and 
 1. Copy the example environment file.
 
    ```bash
-   cp .env.example .env
+   npm run setup
    ```
 
 2. Add your OpenAI API key to `.env`.
 
+   ```bash
+   nano .env
+   ```
+
    ```text
-   OPENAI_API_KEY=your_api_key_here
+   OPENAI_API_KEY=sk-your-real-key-here
    OPENAI_REALTIME_MODEL=gpt-realtime-translate
    OPENAI_TRANSCRIPTION_MODEL=gpt-realtime-whisper
    OPENAI_TRANSLATION_TARGET=ko
    ```
 
+   Save in `nano` with `Control + O`, press `Enter`, then exit with `Control + X`.
+
 3. Start the app.
 
    ```bash
+   npm run doctor
    npm start
    ```
 
@@ -36,6 +43,8 @@ Gwittim currently ships as a local browser MVP with a small Node API server and 
    ```
 
 The browser app streams microphone audio through WebRTC, receives English transcription events, and renders Korean interpretation as live subtitles. Chrome is recommended.
+
+For a fuller local checklist, see [Local Run Guide](docs/local-run.md).
 
 ## Streamlit Cloud Deploy
 

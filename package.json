@@ -5,9 +5,11 @@
   "description": "A quiet real-time English-to-Korean conversation assistant.",
   "type": "module",
   "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "start": "node apps/api/server.mjs",
     "dev": "node apps/api/server.mjs",
-    "check": "node --check apps/api/server.mjs"
+    "check": "node scripts/check.mjs"
   },
   "engines": {
     "node": ">=20"
