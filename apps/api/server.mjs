@@ -313,13 +313,13 @@ function createLiveTranslationSetup({ targetLanguage, echoTargetLanguage }) {
       model: normalizeModelName(config.geminiLiveModel),
       generationConfig: {
         responseModalities: ["AUDIO"],
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
         translationConfig: {
           targetLanguageCode: targetLanguage,
           echoTargetLanguage,
         },
       },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
     },
   };
 }
