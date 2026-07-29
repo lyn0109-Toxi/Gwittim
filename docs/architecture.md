@@ -17,13 +17,12 @@ Audio input
 
 ### Client
 
-The first client can be a desktop app or a browser-based prototype.
+The first client is a browser-based prototype in `apps/web`.
 
 Responsibilities:
 
 - Ask for microphone permission.
-- Capture audio.
-- Stream audio chunks to the backend.
+- Capture speech through browser speech recognition.
 - Render partial and final transcript events.
 - Render Korean translations as subtitles.
 - Provide a small input box for Korean-to-English response drafting.
@@ -33,13 +32,13 @@ Responsibilities:
 
 Responsibilities:
 
-- Accept WebSocket connections.
-- Receive audio chunks.
-- Forward audio to speech recognition.
-- Normalize partial and final transcript events.
+- Serve the browser MVP.
+- Accept final transcript segments.
 - Translate stable transcript segments.
 - Maintain short session context for better translation.
 - Generate live summaries and post-session notes.
+
+The current MVP uses simple HTTP JSON endpoints. A later desktop version should move toward WebSocket or Realtime API events when system audio and lower latency are introduced.
 
 ### Shared Realtime Protocol
 

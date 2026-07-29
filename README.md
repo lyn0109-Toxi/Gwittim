@@ -4,6 +4,36 @@ Gwittim is a quiet real-time conversation assistant for non-native speakers.
 
 The first product goal is simple: listen to English conversations, translate them into Korean in near real time, and quietly help the user understand, respond, and review what happened afterward.
 
+## Quick Start
+
+Gwittim currently ships as a local browser MVP with a small Node API server.
+
+1. Copy the example environment file.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Add your OpenAI API key to `.env`.
+
+   ```text
+   OPENAI_API_KEY=your_api_key_here
+   ```
+
+3. Start the app.
+
+   ```bash
+   npm start
+   ```
+
+4. Open the local app.
+
+   ```text
+   http://localhost:3000
+   ```
+
+The browser app uses the browser's speech recognition support for the first MVP. Chrome is recommended.
+
 ## Product Direction
 
 Gwittim is not just a translator. It is a discreet assistant for calls, meetings, interviews, classes, and in-person conversations.
@@ -34,6 +64,7 @@ The first version should prove the real-time loop:
 .
 ├── apps/
 │   ├── api/          # Realtime transcription, translation, and session backend
+│   ├── web/          # Browser MVP for live subtitles and response drafting
 │   └── desktop/      # Future desktop overlay app
 ├── docs/             # Product, architecture, roadmap, and privacy notes
 ├── packages/
@@ -50,7 +81,7 @@ The first version should prove the real-time loop:
 
 ## Project Status
 
-Planning and foundation stage.
+Local MVP stage.
 
 See:
 

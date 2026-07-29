@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gwittim</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Gwittim</p>
+          <h1>조용히 듣고, 필요한 순간만 귀띔합니다.</h1>
+        </div>
+        <div class="topbar-actions">
+          <span id="connectionStatus" class="status-pill">확인 중</span>
+          <button id="startButton" class="primary-button" type="button">시작</button>
+          <button id="stopButton" class="icon-button" type="button" disabled title="중지">■</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="live-stage" aria-labelledby="liveTitle">
+          <div class="stage-header">
+            <div>
+              <p class="panel-label">Live</p>
+              <h2 id="liveTitle">한국어 자막</h2>
+            </div>
+            <span id="listeningBadge" class="listening-badge">대기</span>
+          </div>
+
+          <div class="subtitle-box">
+            <p id="koreanSubtitle" class="korean-subtitle">시작 버튼을 누르면 영어 대화를 한국어로 표시합니다.</p>
+            <p id="englishInterim" class="english-interim">원문 영어는 여기에 함께 표시됩니다.</p>
+          </div>
+
+          <div class="transcript-list" id="transcriptList" aria-live="polite"></div>
+        </section>
+
+        <aside class="side-panel">
+          <section class="tool-panel" aria-labelledby="summaryTitle">
+            <div class="panel-heading">
+              <p class="panel-label">Brief</p>
+              <h2 id="summaryTitle">실시간 요약</h2>
+            </div>
+            <div id="summaryBox" class="summary-box">대화가 쌓이면 요약이 갱신됩니다.</div>
+          </section>
+
+          <section class="tool-panel" aria-labelledby="composeTitle">
+            <div class="panel-heading">
+              <p class="panel-label">Compose</p>
+              <h2 id="composeTitle">답변 귀띔</h2>
+            </div>
+            <div class="mode-grid" role="group" aria-label="답변 모드">
+              <button class="mode-button is-active" data-mode="neutral" type="button">일반</button>
+              <button class="mode-button" data-mode="agree" type="button">동의</button>
+              <button class="mode-button" data-mode="disagree" type="button">반박</button>
+              <button class="mode-button" data-mode="question" type="button">질문</button>
+            </div>
+            <textarea id="composeInput" rows="4" placeholder="한국어로 하고 싶은 말을 적으세요."></textarea>
+            <button id="composeButton" class="secondary-button" type="button">영어 답변 만들기</button>
+            <pre id="composeOutput" class="compose-output">추천 문장이 여기에 표시됩니다.</pre>
+          </section>
+
+          <section class="tool-panel compact" aria-labelledby="settingsTitle">
+            <div class="panel-heading">
+              <p class="panel-label">Settings</p>
+              <h2 id="settingsTitle">세션</h2>
+            </div>
+            <dl class="settings-list">
+              <div>
+                <dt>오디오 저장</dt>
+                <dd>저장 안 함</dd>
+              </div>
+              <div>
+                <dt>모델</dt>
+                <dd id="modelName">-</dd>
+              </div>
+              <div>
+                <dt>인식</dt>
+                <dd id="speechSupport">확인 중</dd>
+              </div>
+            </dl>
+            <button id="clearButton" class="text-button" type="button">세션 지우기</button>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <dialog id="consentDialog" class="consent-dialog">
+      <form method="dialog">
+        <p class="panel-label">Consent</p>
+        <h2>대화를 처리하기 전에 확인해주세요.</h2>
+        <p>
+          Gwittim은 마이크로 들리는 음성을 텍스트와 번역으로 처리합니다. 현재 MVP는 원본 오디오를 저장하지 않으며,
+          화면의 대화 기록은 이 브라우저 세션 안에서만 유지됩니다.
+        </p>
+        <p>
+          다른 사람의 음성이 포함될 수 있으므로, 대화나 회의에 적용되는 고지와 동의 요건은 사용자가 확인해야 합니다.
+        </p>
+        <div class="dialog-actions">
+          <button value="cancel" class="text-button" type="submit">취소</button>
+          <button id="confirmStartButton" value="start" class="primary-button" type="submit">동의하고 시작</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

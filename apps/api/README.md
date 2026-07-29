@@ -1,14 +1,17 @@
 # Gwittim API
 
-This app will host the realtime backend for transcription, translation, summaries, and response suggestions.
+This app hosts the local MVP backend for translation, summaries, response suggestions, and static web serving.
 
-Planned responsibilities:
+Current responsibilities:
 
-- WebSocket session handling.
-- Audio chunk ingestion.
-- Speech recognition provider integration.
-- Translation provider integration.
-- Live summary generation.
-- Session history persistence when enabled.
+- Serve `apps/web` at `http://localhost:3000`.
+- Accept transcript text from the browser MVP.
+- Translate English into Korean through the OpenAI Responses API.
+- Generate live Korean summaries.
+- Compose natural English responses from Korean drafts.
 
-No runtime stack has been committed yet. Choose the stack after the first prototype target is confirmed.
+Run from the repository root:
+
+```bash
+npm start
+```

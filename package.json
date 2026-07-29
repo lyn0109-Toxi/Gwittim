@@ -1,0 +1,15 @@
+{
+  "name": "gwittim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A quiet real-time English-to-Korean conversation assistant.",
+  "type": "module",
+  "scripts": {
+    "start": "node apps/api/server.mjs",
+    "dev": "node apps/api/server.mjs",
+    "check": "node --check apps/api/server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
