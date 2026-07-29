@@ -188,7 +188,7 @@ async function callOpenAI({ instructions, input, maxOutputTokens }) {
     max_output_tokens: maxOutputTokens,
   };
 
-  if (config.reasoningEffort) {
+  if (config.reasoningEffort && config.reasoningEffort !== "none") {
     payload.reasoning = { effort: config.reasoningEffort };
   }
 

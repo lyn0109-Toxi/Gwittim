@@ -34,6 +34,28 @@ Gwittim currently ships as a local browser MVP with a small Node API server.
 
 The browser app uses the browser's speech recognition support for the first MVP. Chrome is recommended.
 
+## Streamlit Cloud Deploy
+
+This repository also includes a Streamlit-compatible MVP for quick public deployment.
+
+Use these settings on Streamlit Cloud:
+
+```text
+Repository: lyn0109-Toxi/Gwittim
+Branch: main
+Main file path: streamlit_app.py
+```
+
+Add your OpenAI key in Streamlit Cloud secrets:
+
+```toml
+OPENAI_API_KEY = "your_api_key_here"
+OPENAI_MODEL = "gpt-5.6-luna"
+OPENAI_REASONING_EFFORT = "none"
+```
+
+The Streamlit version is a deployable text-input demo. The local Node version is the first microphone-based prototype.
+
 ## Product Direction
 
 Gwittim is not just a translator. It is a discreet assistant for calls, meetings, interviews, classes, and in-person conversations.
@@ -69,6 +91,7 @@ The first version should prove the real-time loop:
 ├── docs/             # Product, architecture, roadmap, and privacy notes
 ├── packages/
 │   └── realtime/     # Shared realtime protocol and event contracts
+├── streamlit_app.py  # Streamlit Cloud deployment entrypoint
 └── .github/          # GitHub issue and pull request templates
 ```
 
