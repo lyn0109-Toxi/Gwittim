@@ -55,19 +55,19 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && url.pathname === "/api/translate") {
-      return handleTranslate(request, response);
+      return await handleTranslate(request, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/summarize") {
-      return handleSummarize(request, response);
+      return await handleSummarize(request, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/compose") {
-      return handleCompose(request, response);
+      return await handleCompose(request, response);
     }
 
     if (request.method === "POST" && url.pathname === "/api/gemini/live-token") {
-      return handleGeminiLiveToken(request, response);
+      return await handleGeminiLiveToken(request, response);
     }
 
     if (request.method === "GET") {
@@ -161,10 +161,6 @@ async function handleGeminiLiveToken(request, response) {
         uses: 1,
         expireTime,
         newSessionExpireTime,
-        liveConnectConstraints: {
-          model: normalizeModelName(config.geminiLiveModel),
-          config: setup.setup.generationConfig,
-        },
       }),
     },
   );

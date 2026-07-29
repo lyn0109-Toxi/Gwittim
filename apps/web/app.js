@@ -198,7 +198,7 @@ async function startRealtimeInterpretation() {
     stopRealtimeInterpretation();
     setStatus("연결 실패", "error");
     setListening("오류", "error");
-    showError(error.message);
+    showError(formatRealtimeStartError(error));
   }
 }
 
@@ -763,6 +763,28 @@ function setListening(text, tone) {
 
 function showError(message) {
   elements.koreanSubtitle.textContent = message;
+}
+
+function formatRealtimeStartError(error) {
+  const name = error?.name || "";
+  const message = error?.message || "실시간 통역을 시작하지 못했습니다.";
+
+  if (name === "NotAllowedError" || name === "SecurityError") {
+    return [
+      "마이크 권한이 차단되었습니다.",
+      "Chrome 주소창 왼쪽의 사이트 설정에서 마이크를 허용하거나, macOS 시스템 설정 > 개인정보 보호 및 보안 > 마이크에서 Chrome을 허용해주세요.",
+    ].join(" ");
+  }
+
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return "사용 가능한 마이크를 찾지 못했습니다. 마이크 연결을 확인한 뒤 다시 시작해주세요.";
+  }
+
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return "마이크를 열 수 없습니다. 다른 앱이 마이크를 사용 중이면 종료한 뒤 다시 시도해주세요.";
+  }
+
+  return message;
 }
 
 function escapeHtml(value) {
