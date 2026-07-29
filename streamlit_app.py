@@ -190,7 +190,7 @@ def render_header(settings):
     with left:
         st.caption("Gwittim")
         st.title("조용히 듣고, 필요한 순간만 귀띔합니다.")
-        st.write("영어 대화를 한국어로 따라가고, 필요한 답변을 영어로 다듬는 배포용 MVP입니다.")
+        st.write("영어 대화를 한국어로 따라가고, 필요한 답변을 영어로 다듬는 배포용 미리보기입니다.")
     with right:
         if settings["api_key"]:
             st.success("API ready")
@@ -302,7 +302,7 @@ def main():
     render_header(settings)
 
     st.warning(
-        "Streamlit 배포용 MVP는 텍스트 입력 기반입니다. 실시간 마이크 자막은 로컬 Node 웹앱에서 먼저 지원합니다."
+        "Streamlit 배포용 화면은 텍스트 입력 기반 미리보기입니다. 실제 실시간 마이크 통역은 로컬 Node 웹앱에서 지원합니다."
     )
 
     main_col, side_col = st.columns([0.64, 0.36], gap="large")

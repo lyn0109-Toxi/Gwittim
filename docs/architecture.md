@@ -4,10 +4,10 @@
 
 ```text
 Audio input
-  -> audio chunking
-  -> realtime speech recognition
-  -> transcript event stream
-  -> translation stream
+  -> browser WebRTC connection
+  -> OpenAI Realtime API
+  -> English transcription event stream
+  -> Korean interpretation stream
   -> live subtitle UI
   -> summary and response assistant
   -> optional saved session note
@@ -22,7 +22,8 @@ The first client is a browser-based prototype in `apps/web`.
 Responsibilities:
 
 - Ask for microphone permission.
-- Capture speech through browser speech recognition.
+- Capture microphone audio.
+- Stream microphone audio through WebRTC.
 - Render partial and final transcript events.
 - Render Korean translations as subtitles.
 - Provide a small input box for Korean-to-English response drafting.
@@ -33,12 +34,13 @@ Responsibilities:
 Responsibilities:
 
 - Serve the browser MVP.
+- Create short-lived Realtime Translation client secrets while keeping the OpenAI API key server-side.
 - Accept final transcript segments.
 - Translate stable transcript segments.
 - Maintain short session context for better translation.
 - Generate live summaries and post-session notes.
 
-The current MVP uses simple HTTP JSON endpoints. A later desktop version should move toward WebSocket or Realtime API events when system audio and lower latency are introduced.
+The current MVP uses OpenAI Realtime API WebRTC for microphone interpretation and simple HTTP JSON endpoints for summaries and response drafting. A later desktop version should add system audio capture where platform permissions allow it.
 
 ### Shared Realtime Protocol
 

@@ -1,24 +1,27 @@
-const SpeechRecognition =
-  window.SpeechRecognition || window.webkitSpeechRecognition || null;
-
 const state = {
-  recognition: null,
+  peerConnection: null,
+  dataChannel: null,
+  localStream: null,
   listening: false,
   selectedMode: "neutral",
   segments: [],
   pendingSummaryAt: 0,
   config: null,
+  activeInputTranscript: "",
+  activeOutputTranscript: "",
+  finalizeTimer: null,
+  lastFinalizedKorean: "",
 };
 
 const elements = {
   connectionStatus: document.querySelector("#connectionStatus"),
   startButton: document.querySelector("#startButton"),
   stopButton: document.querySelector("#stopButton"),
-  confirmStartButton: document.querySelector("#confirmStartButton"),
   consentDialog: document.querySelector("#consentDialog"),
   listeningBadge: document.querySelector("#listeningBadge"),
   koreanSubtitle: document.querySelector("#koreanSubtitle"),
   englishInterim: document.querySelector("#englishInterim"),
+  translatedAudio: document.querySelector("#translatedAudio"),
   transcriptList: document.querySelector("#transcriptList"),
   summaryBox: document.querySelector("#summaryBox"),
   composeInput: document.querySelector("#composeInput"),
@@ -34,14 +37,14 @@ init();
 
 async function init() {
   bindEvents();
-  updateSpeechSupport();
+  updateRuntimeSupport();
   await loadConfig();
 }
 
 function bindEvents() {
   elements.startButton.addEventListener("click", () => {
-    if (!SpeechRecognition) {
-      showError("이 브라우저에서는 음성 인식을 사용할 수 없습니다.");
+    if (!canUseRealtime()) {
+      showError("이 브라우저에서는 실시간 마이크 통역을 사용할 수 없습니다.");
       return;
     }
     elements.consentDialog.showModal();
@@ -49,11 +52,11 @@ function bindEvents() {
 
   elements.consentDialog.addEventListener("close", () => {
     if (elements.consentDialog.returnValue === "start") {
-      startListening();
+      void startRealtimeInterpretation();
     }
   });
 
-  elements.stopButton.addEventListener("click", stopListening);
+  elements.stopButton.addEventListener("click", stopRealtimeInterpretation);
   elements.composeButton.addEventListener("click", composeResponse);
   elements.clearButton.addEventListener("click", clearSession);
 
@@ -70,14 +73,14 @@ async function loadConfig() {
   try {
     const config = await requestJson("/api/config");
     state.config = config;
-    elements.modelName.textContent = config.model || "-";
+    elements.modelName.textContent = config.realtimeModel || config.model || "-";
 
     if (config.keyConfigured) {
-      setStatus("API 준비됨", "ready");
+      setStatus("통역 준비됨", "ready");
     } else {
       setStatus("API 키 필요", "error");
       elements.summaryBox.textContent =
-        ".env 파일에 OPENAI_API_KEY를 설정하면 번역과 요약이 동작합니다.";
+        ".env 파일에 OPENAI_API_KEY를 설정하면 실시간 통역이 동작합니다.";
     }
   } catch (error) {
     setStatus("서버 연결 실패", "error");
@@ -85,107 +88,250 @@ async function loadConfig() {
   }
 }
 
-function updateSpeechSupport() {
-  elements.speechSupport.textContent = SpeechRecognition ? "지원됨" : "미지원";
+function updateRuntimeSupport() {
+  elements.speechSupport.textContent = canUseRealtime() ? "WebRTC 통역" : "미지원";
 }
 
-function startListening() {
+function canUseRealtime() {
+  return Boolean(
+    navigator.mediaDevices?.getUserMedia &&
+      window.RTCPeerConnection &&
+      window.RTCSessionDescription,
+  );
+}
+
+async function startRealtimeInterpretation() {
   if (state.listening) {
     return;
   }
 
-  const recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
+  if (!state.config?.keyConfigured) {
+    showError("OPENAI_API_KEY를 먼저 설정해주세요.");
+    return;
+  }
 
-  recognition.onstart = () => {
-    state.listening = true;
-    elements.startButton.disabled = true;
-    elements.stopButton.disabled = false;
-    setListening("듣는 중", "live");
-  };
+  resetRealtimeState();
+  setListening("마이크 준비", "live");
+  setStatus("연결 중", "ready");
+  elements.startButton.disabled = true;
+  elements.stopButton.disabled = false;
+  elements.koreanSubtitle.textContent = "영어로 말하면 한국어 통역이 여기에 표시됩니다.";
+  elements.englishInterim.textContent = "마이크 권한을 확인하고 있습니다.";
 
-  recognition.onend = () => {
-    state.listening = false;
-    elements.startButton.disabled = false;
-    elements.stopButton.disabled = true;
-    setListening("대기", "idle");
-  };
-
-  recognition.onerror = (event) => {
-    setListening("오류", "error");
-    showError(`음성 인식 오류: ${event.error}`);
-  };
-
-  recognition.onresult = (event) => {
-    let interim = "";
-    const finalTexts = [];
-
-    for (let index = event.resultIndex; index < event.results.length; index += 1) {
-      const result = event.results[index];
-      const text = result[0]?.transcript?.trim();
-      if (!text) {
-        continue;
-      }
-
-      if (result.isFinal) {
-        finalTexts.push(text);
-      } else {
-        interim += `${text} `;
-      }
-    }
-
-    if (interim.trim()) {
-      elements.englishInterim.textContent = interim.trim();
-    }
-
-    finalTexts.forEach((text) => {
-      void handleFinalTranscript(text);
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
     });
-  };
 
-  state.recognition = recognition;
-  recognition.start();
-}
+    const peerConnection = new RTCPeerConnection();
+    const dataChannel = peerConnection.createDataChannel("oai-events");
 
-function stopListening() {
-  if (state.recognition) {
-    state.recognition.stop();
+    peerConnection.addEventListener("track", (event) => {
+      const [remoteStream] = event.streams;
+      if (remoteStream) {
+        elements.translatedAudio.srcObject = remoteStream;
+        void elements.translatedAudio.play().catch(() => {});
+      }
+    });
+
+    stream.getAudioTracks().forEach((track) => {
+      peerConnection.addTrack(track, stream);
+    });
+
+    dataChannel.addEventListener("open", () => {
+      state.listening = true;
+      setStatus("실시간 연결됨", "ready");
+      setListening("듣는 중", "live");
+      elements.englishInterim.textContent = "말하는 동안 영어 전사와 한국어 통역이 표시됩니다.";
+    });
+
+    dataChannel.addEventListener("message", (event) => {
+      handleRealtimeEvent(event.data);
+    });
+
+    dataChannel.addEventListener("close", () => {
+      if (state.listening) {
+        stopRealtimeInterpretation();
+      }
+    });
+
+    peerConnection.addEventListener("connectionstatechange", () => {
+      if (["failed", "disconnected", "closed"].includes(peerConnection.connectionState)) {
+        if (state.listening) {
+          stopRealtimeInterpretation();
+        }
+      }
+    });
+
+    state.peerConnection = peerConnection;
+    state.dataChannel = dataChannel;
+    state.localStream = stream;
+
+    const session = await requestJson("/api/realtime/translation-session", {
+      method: "POST",
+      body: JSON.stringify({ targetLanguage: state.config.translationTarget || "ko" }),
+    });
+
+    if (!session.client_secret) {
+      throw new Error("실시간 통역 세션 키를 받지 못했습니다.");
+    }
+
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    const sdpResponse = await fetch(
+      "https://api.openai.com/v1/realtime/translations/calls",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.client_secret}`,
+          "Content-Type": "application/sdp",
+        },
+        body: offer.sdp,
+      },
+    );
+
+    if (!sdpResponse.ok) {
+      throw new Error(await readOpenAIRealtimeError(sdpResponse));
+    }
+
+    await peerConnection.setRemoteDescription({
+      type: "answer",
+      sdp: await sdpResponse.text(),
+    });
+  } catch (error) {
+    stopRealtimeInterpretation();
+    setStatus("연결 실패", "error");
+    setListening("오류", "error");
+    showError(error.message);
   }
 }
 
-async function handleFinalTranscript(english) {
+function stopRealtimeInterpretation() {
+  state.listening = false;
+
+  if (state.dataChannel && state.dataChannel.readyState === "open") {
+    state.dataChannel.close();
+  }
+
+  if (state.peerConnection) {
+    state.peerConnection.close();
+  }
+
+  if (state.localStream) {
+    state.localStream.getTracks().forEach((track) => track.stop());
+  }
+
+  state.dataChannel = null;
+  state.peerConnection = null;
+  state.localStream = null;
+  state.activeInputTranscript = "";
+  state.activeOutputTranscript = "";
+  clearFinalizeTimer();
+  elements.translatedAudio.srcObject = null;
+  elements.startButton.disabled = false;
+  elements.stopButton.disabled = true;
+  setListening("대기", "idle");
+
+  if (state.config?.keyConfigured) {
+    setStatus("통역 준비됨", "ready");
+  }
+}
+
+function resetRealtimeState() {
+  state.activeInputTranscript = "";
+  state.activeOutputTranscript = "";
+  clearFinalizeTimer();
+}
+
+function handleRealtimeEvent(rawData) {
+  let event;
+  try {
+    event = JSON.parse(rawData);
+  } catch {
+    return;
+  }
+
+  if (event.type === "error") {
+    const message = event.error?.message || "실시간 통역 중 오류가 발생했습니다.";
+    setStatus("통역 오류", "error");
+    showError(message);
+    return;
+  }
+
+  if (event.type === "session.input_transcript.delta") {
+    state.activeInputTranscript += event.delta || "";
+    elements.englishInterim.textContent =
+      state.activeInputTranscript || "음성을 인식하는 중...";
+    return;
+  }
+
+  if (event.type === "session.output_transcript.delta") {
+    state.activeOutputTranscript += event.delta || "";
+    elements.koreanSubtitle.textContent = state.activeOutputTranscript || "통역 중...";
+    scheduleRealtimeSegmentFinalize();
+    return;
+  }
+
+  if (event.type === "session.input_transcript.done" && event.transcript) {
+    state.activeInputTranscript = event.transcript;
+    elements.englishInterim.textContent = event.transcript;
+    return;
+  }
+
+  if (event.type === "session.output_transcript.done") {
+    clearFinalizeTimer();
+    finalizeRealtimeSegment(event.transcript || state.activeOutputTranscript);
+    return;
+  }
+
+  if (event.type === "session.updated") {
+    setStatus("통역 세션 준비됨", "ready");
+  }
+}
+
+function finalizeRealtimeSegment(text) {
+  const korean = (text || state.activeOutputTranscript).trim();
+  const english = state.activeInputTranscript.trim() || "음성 인식 중";
+
+  if (!korean || korean === state.lastFinalizedKorean) {
+    return;
+  }
+
   const segment = {
     id: crypto.randomUUID(),
     at: new Date(),
     english,
-    korean: "번역 중...",
+    korean,
   };
 
   state.segments.push(segment);
+  elements.koreanSubtitle.textContent = korean;
   elements.englishInterim.textContent = english;
-  elements.koreanSubtitle.textContent = "번역 중...";
   renderTranscript();
+  maybeRefreshSummary();
 
-  try {
-    const result = await requestJson("/api/translate", {
-      method: "POST",
-      body: JSON.stringify({
-        text: english,
-        context: state.segments.slice(-8),
-      }),
-    });
+  state.activeInputTranscript = "";
+  state.activeOutputTranscript = "";
+  state.lastFinalizedKorean = korean;
+  clearFinalizeTimer();
+}
 
-    segment.korean = result.translation || "";
-    elements.koreanSubtitle.textContent = segment.korean || "번역 결과가 없습니다.";
-    renderTranscript();
-    maybeRefreshSummary();
-  } catch (error) {
-    segment.korean = "번역 실패";
-    elements.koreanSubtitle.textContent = error.message;
-    renderTranscript();
+function scheduleRealtimeSegmentFinalize() {
+  clearFinalizeTimer();
+  state.finalizeTimer = window.setTimeout(() => {
+    finalizeRealtimeSegment(state.activeOutputTranscript);
+  }, 900);
+}
+
+function clearFinalizeTimer() {
+  if (state.finalizeTimer) {
+    window.clearTimeout(state.finalizeTimer);
+    state.finalizeTimer = null;
   }
 }
 
@@ -271,8 +417,12 @@ function renderTranscript() {
 function clearSession() {
   state.segments = [];
   state.pendingSummaryAt = 0;
+  state.activeInputTranscript = "";
+  state.activeOutputTranscript = "";
+  state.lastFinalizedKorean = "";
+  clearFinalizeTimer();
   elements.koreanSubtitle.textContent = "세션을 지웠습니다.";
-  elements.englishInterim.textContent = "새 대화를 시작할 수 있습니다.";
+  elements.englishInterim.textContent = "새 통역을 시작할 수 있습니다.";
   elements.summaryBox.textContent = "대화가 쌓이면 요약이 갱신됩니다.";
   elements.composeOutput.textContent = "추천 문장이 여기에 표시됩니다.";
   renderTranscript();
@@ -294,6 +444,16 @@ async function requestJson(url, options = {}) {
   }
 
   return data;
+}
+
+async function readOpenAIRealtimeError(response) {
+  const text = await response.text();
+  try {
+    const data = JSON.parse(text);
+    return data?.error?.message || data?.message || `통역 연결 실패: ${response.status}`;
+  } catch {
+    return text || `통역 연결 실패: ${response.status}`;
+  }
 }
 
 function setStatus(text, tone) {

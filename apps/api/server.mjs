@@ -15,6 +15,10 @@ const config = {
   host: process.env.HOST || "127.0.0.1",
   port: Number(process.env.PORT || 3000),
   model: process.env.OPENAI_MODEL || "gpt-5.6-luna",
+  realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-translate",
+  transcriptionModel:
+    process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-realtime-whisper",
+  translationTarget: process.env.OPENAI_TRANSLATION_TARGET || "ko",
   reasoningEffort: process.env.OPENAI_REASONING_EFFORT || "none",
   apiKey: process.env.OPENAI_API_KEY || "",
 };
@@ -36,6 +40,9 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, {
         keyConfigured: Boolean(config.apiKey),
         model: config.model,
+        realtimeModel: config.realtimeModel,
+        transcriptionModel: config.transcriptionModel,
+        translationTarget: config.translationTarget,
         reasoningEffort: config.reasoningEffort,
       });
     }
@@ -54,6 +61,13 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "POST" && url.pathname === "/api/compose") {
       return handleCompose(request, response);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/realtime/translation-session"
+    ) {
+      return handleTranslationSession(request, response);
     }
 
     if (request.method === "GET") {
@@ -106,6 +120,66 @@ async function handleTranslate(request, response) {
   });
 
   sendJson(response, 200, { translation: translated.trim() });
+}
+
+async function handleTranslationSession(request, response) {
+  const body = await readJson(request);
+  const targetLanguage = cleanInput(body.targetLanguage || config.translationTarget);
+
+  if (!config.apiKey) {
+    return sendJson(response, 503, {
+      error: "OPENAI_API_KEY is not configured",
+    });
+  }
+
+  if (!isSupportedTranslationTarget(targetLanguage)) {
+    return sendJson(response, 400, {
+      error: `Unsupported translation target: ${targetLanguage}`,
+    });
+  }
+
+  const openAIResponse = await fetch(
+    "https://api.openai.com/v1/realtime/translations/client_secrets",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session: {
+          model: config.realtimeModel,
+          audio: {
+            input: {
+              transcription: { model: config.transcriptionModel },
+              noise_reduction: { type: "near_field" },
+            },
+            output: { language: targetLanguage },
+          },
+        },
+      }),
+    },
+  );
+
+  const data = await openAIResponse.json().catch(() => ({}));
+
+  if (!openAIResponse.ok) {
+    const message = parseOpenAIError(JSON.stringify(data), openAIResponse.status);
+    const error = new Error(message);
+    error.statusCode = openAIResponse.status;
+    throw error;
+  }
+
+  const clientSecret =
+    typeof data.client_secret === "string"
+      ? data.client_secret
+      : data.client_secret?.value;
+
+  sendJson(response, 200, {
+    ...data,
+    client_secret: clientSecret,
+    targetLanguage,
+  });
 }
 
 async function handleSummarize(request, response) {
@@ -219,6 +293,37 @@ async function callOpenAI({ instructions, input, maxOutputTokens }) {
   }
 
   return text;
+}
+
+function parseOpenAIError(rawText, statusCode) {
+  try {
+    const data = JSON.parse(rawText);
+    return (
+      data?.error?.message ||
+      data?.message ||
+      `OpenAI realtime request failed with status ${statusCode}`
+    );
+  } catch {
+    return rawText || `OpenAI realtime request failed with status ${statusCode}`;
+  }
+}
+
+function isSupportedTranslationTarget(language) {
+  return new Set([
+    "es",
+    "pt",
+    "fr",
+    "ja",
+    "ru",
+    "zh",
+    "de",
+    "ko",
+    "hi",
+    "id",
+    "vi",
+    "it",
+    "en",
+  ]).has(language);
 }
 
 function extractOutputText(data) {

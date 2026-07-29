@@ -6,7 +6,7 @@ The first product goal is simple: listen to English conversations, translate the
 
 ## Quick Start
 
-Gwittim currently ships as a local browser MVP with a small Node API server.
+Gwittim currently ships as a local browser MVP with a small Node API server and OpenAI Realtime API WebRTC streaming.
 
 1. Copy the example environment file.
 
@@ -18,6 +18,9 @@ Gwittim currently ships as a local browser MVP with a small Node API server.
 
    ```text
    OPENAI_API_KEY=your_api_key_here
+   OPENAI_REALTIME_MODEL=gpt-realtime-translate
+   OPENAI_TRANSCRIPTION_MODEL=gpt-realtime-whisper
+   OPENAI_TRANSLATION_TARGET=ko
    ```
 
 3. Start the app.
@@ -32,11 +35,11 @@ Gwittim currently ships as a local browser MVP with a small Node API server.
    http://localhost:3000
    ```
 
-The browser app uses the browser's speech recognition support for the first MVP. Chrome is recommended.
+The browser app streams microphone audio through WebRTC, receives English transcription events, and renders Korean interpretation as live subtitles. Chrome is recommended.
 
 ## Streamlit Cloud Deploy
 
-This repository also includes a Streamlit-compatible MVP for quick public deployment.
+This repository also includes a Streamlit-compatible preview for quick public deployment.
 
 Use these settings on Streamlit Cloud:
 
@@ -51,10 +54,13 @@ Add your OpenAI key in Streamlit Cloud secrets:
 ```toml
 OPENAI_API_KEY = "your_api_key_here"
 OPENAI_MODEL = "gpt-5.6-luna"
+OPENAI_REALTIME_MODEL = "gpt-realtime-translate"
+OPENAI_TRANSCRIPTION_MODEL = "gpt-realtime-whisper"
+OPENAI_TRANSLATION_TARGET = "ko"
 OPENAI_REASONING_EFFORT = "none"
 ```
 
-The Streamlit version is a deployable text-input demo. The local Node version is the first microphone-based prototype.
+The Streamlit version is a deployable text-input preview. The local Node version is the realtime microphone interpreter.
 
 ## Product Direction
 
@@ -73,10 +79,10 @@ Core experience:
 
 The first version should prove the real-time loop:
 
-1. Capture live audio.
-2. Stream audio to speech recognition.
-3. Translate recognized English into Korean.
-4. Render subtitle-style output.
+1. Capture live microphone audio.
+2. Stream audio to the Realtime API over WebRTC.
+3. Receive English transcription and Korean interpretation events.
+4. Render Korean subtitle-style output.
 5. Keep a short rolling transcript.
 6. Generate a brief conversation summary.
 

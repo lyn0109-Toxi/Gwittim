@@ -8,11 +8,12 @@
 - Define privacy and consent requirements.
 - Choose first client target: browser prototype or desktop overlay.
 
-## Phase 1: Realtime Translation Prototype
+## Phase 1: Realtime Interpretation Prototype
 
 - Microphone capture.
-- Realtime English transcription.
-- English-to-Korean translation.
+- Realtime audio streaming through WebRTC.
+- English transcription events.
+- English-to-Korean interpretation events.
 - Subtitle-style UI.
 - Rolling transcript panel.
 
