@@ -173,7 +173,7 @@ async function handleTranslationSession(request, response) {
   const clientSecret =
     typeof data.client_secret === "string"
       ? data.client_secret
-      : data.client_secret?.value;
+      : data.client_secret?.value || data.value;
 
   sendJson(response, 200, {
     ...data,
