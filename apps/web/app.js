@@ -1,5 +1,4 @@
 const INPUT_SAMPLE_RATE = 16000;
-const DEFAULT_OUTPUT_SAMPLE_RATE = 24000;
 const INPUT_MIME_TYPE = `audio/pcm;rate=${INPUT_SAMPLE_RATE}`;
 
 const state = {
@@ -8,9 +7,6 @@ const state = {
   audioContext: null,
   inputSource: null,
   inputProcessor: null,
-  outputGain: null,
-  outputNodes: [],
-  nextOutputTime: 0,
   socketClosedByUser: false,
   listening: false,
   selectedMode: "neutral",
@@ -31,7 +27,6 @@ const elements = {
   listeningBadge: document.querySelector("#listeningBadge"),
   koreanSubtitle: document.querySelector("#koreanSubtitle"),
   englishInterim: document.querySelector("#englishInterim"),
-  translatedAudio: document.querySelector("#translatedAudio"),
   transcriptList: document.querySelector("#transcriptList"),
   summaryBox: document.querySelector("#summaryBox"),
   composeInput: document.querySelector("#composeInput"),
@@ -103,7 +98,7 @@ async function loadConfig() {
 
 function updateRuntimeSupport() {
   elements.speechSupport.textContent = canUseRealtime()
-    ? "Gemini Live 통역"
+    ? "Gemini Live 텍스트"
     : "미지원";
 }
 
@@ -156,9 +151,6 @@ async function startRealtimeInterpretation() {
 
     const audioContext = createAudioContext();
     state.audioContext = audioContext;
-    state.outputGain = audioContext.createGain();
-    state.outputGain.connect(audioContext.destination);
-    state.nextOutputTime = audioContext.currentTime + 0.05;
     await audioContext.resume();
 
     const socket = new WebSocket(createGeminiWebSocketUrl(session));
@@ -219,7 +211,6 @@ function stopRealtimeInterpretation(options = {}) {
   }
 
   stopMicrophoneStreaming();
-  stopOutputPlayback();
 
   if (state.localStream) {
     state.localStream.getTracks().forEach((track) => track.stop());
@@ -232,13 +223,9 @@ function stopRealtimeInterpretation(options = {}) {
   state.socket = null;
   state.localStream = null;
   state.audioContext = null;
-  state.outputGain = null;
-  state.nextOutputTime = 0;
   state.activeInputTranscript = "";
   state.activeOutputTranscript = "";
   clearFinalizeTimer();
-  elements.translatedAudio.removeAttribute("src");
-  elements.translatedAudio.srcObject = null;
   elements.startButton.disabled = false;
   elements.stopButton.disabled = true;
   setListening("대기", "idle");
@@ -253,7 +240,6 @@ function resetRealtimeState() {
   state.activeOutputTranscript = "";
   state.lastFinalizedKorean = "";
   clearFinalizeTimer();
-  stopOutputPlayback();
 }
 
 function createAudioContext() {
@@ -404,7 +390,6 @@ async function handleGeminiMessage(rawData) {
   }
 
   if (serverContent.interrupted) {
-    stopOutputPlayback();
     clearFinalizeTimer();
   }
 
@@ -429,11 +414,19 @@ async function handleGeminiMessage(rawData) {
     scheduleRealtimeSegmentFinalize();
   }
 
-  for (const part of serverContent.modelTurn?.parts || []) {
-    const inlineData = part.inlineData;
-    if (inlineData?.data) {
-      playGeminiAudioChunk(inlineData.data, inlineData.mimeType);
-    }
+  const textParts = (serverContent.modelTurn?.parts || [])
+    .map((part) => part.text)
+    .filter(Boolean)
+    .join("");
+
+  if (textParts) {
+    state.activeOutputTranscript = mergeTranscript(
+      state.activeOutputTranscript,
+      textParts,
+    );
+    elements.koreanSubtitle.textContent =
+      state.activeOutputTranscript || "통역 중...";
+    scheduleRealtimeSegmentFinalize();
   }
 
   if (serverContent.turnComplete) {
@@ -457,57 +450,6 @@ function mergeTranscript(current, incoming) {
     return current;
   }
   return `${current}${text}`;
-}
-
-function playGeminiAudioChunk(base64Audio, mimeType = "") {
-  const audioContext = state.audioContext;
-  if (!audioContext) {
-    return;
-  }
-
-  const samples = pcm16Base64ToFloat32(base64Audio);
-  if (samples.length === 0) {
-    return;
-  }
-
-  const sampleRate = parseSampleRate(mimeType) || DEFAULT_OUTPUT_SAMPLE_RATE;
-  const buffer = audioContext.createBuffer(1, samples.length, sampleRate);
-  buffer.copyToChannel(samples, 0);
-
-  const source = audioContext.createBufferSource();
-  source.buffer = buffer;
-  source.connect(state.outputGain || audioContext.destination);
-
-  const startAt = Math.max(
-    audioContext.currentTime + 0.02,
-    state.nextOutputTime || audioContext.currentTime,
-  );
-  source.start(startAt);
-  state.nextOutputTime = startAt + buffer.duration;
-  state.outputNodes.push(source);
-  source.onended = () => {
-    state.outputNodes = state.outputNodes.filter((node) => node !== source);
-    try {
-      source.disconnect();
-    } catch {
-      // Some browsers throw when an already-ended source was disconnected.
-    }
-  };
-}
-
-function stopOutputPlayback() {
-  for (const source of state.outputNodes.splice(0)) {
-    try {
-      source.stop();
-    } catch {
-      // Already stopped sources can be ignored.
-    }
-    source.disconnect();
-  }
-
-  if (state.audioContext) {
-    state.nextOutputTime = state.audioContext.currentTime;
-  }
 }
 
 function finalizeRealtimeSegment(text) {
@@ -644,7 +586,6 @@ function clearSession() {
   state.activeOutputTranscript = "";
   state.lastFinalizedKorean = "";
   clearFinalizeTimer();
-  stopOutputPlayback();
   elements.koreanSubtitle.textContent = "세션을 지웠습니다.";
   elements.englishInterim.textContent = "새 통역을 시작할 수 있습니다.";
   elements.summaryBox.textContent = "대화가 쌓이면 요약이 갱신됩니다.";
@@ -697,18 +638,6 @@ function resampleFloat32ToPCM16(input, inputSampleRate, outputSampleRate) {
   return output.buffer;
 }
 
-function pcm16Base64ToFloat32(base64Audio) {
-  const bytes = base64ToUint8Array(base64Audio);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const samples = new Float32Array(Math.floor(bytes.byteLength / 2));
-
-  for (let index = 0; index < samples.length; index += 1) {
-    samples[index] = view.getInt16(index * 2, true) / 32768;
-  }
-
-  return samples;
-}
-
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -720,22 +649,6 @@ function arrayBufferToBase64(buffer) {
   }
 
   return btoa(binary);
-}
-
-function base64ToUint8Array(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-
-  return bytes;
-}
-
-function parseSampleRate(mimeType) {
-  const match = String(mimeType).match(/rate=(\d+)/);
-  return match ? Number(match[1]) : null;
 }
 
 function clamp(value, min, max) {

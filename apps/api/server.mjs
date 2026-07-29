@@ -46,7 +46,7 @@ const server = createServer(async (request, response) => {
         translationTarget: config.translationTarget,
         echoTargetLanguage: config.echoTargetLanguage,
         inputSampleRate: 16000,
-        outputSampleRate: 24000,
+        outputMode: "text",
       });
     }
 
@@ -312,14 +312,13 @@ function createLiveTranslationSetup({ targetLanguage, echoTargetLanguage }) {
     setup: {
       model: normalizeModelName(config.geminiLiveModel),
       generationConfig: {
-        responseModalities: ["AUDIO"],
+        responseModalities: ["TEXT"],
         translationConfig: {
           targetLanguageCode: targetLanguage,
           echoTargetLanguage,
         },
       },
       inputAudioTranscription: {},
-      outputAudioTranscription: {},
     },
   };
 }
