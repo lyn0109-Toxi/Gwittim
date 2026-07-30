@@ -8,6 +8,11 @@ import streamlit as st
 APP_TITLE = "Gwittim"
 APP_MODE = "텍스트 번역 전용"
 DEFAULT_MODEL = "gemini-3.6-flash"
+LOCAL_REALTIME_URL = "http://127.0.0.1:3000"
+GITHUB_REPO_URL = "https://github.com/lyn0109-Toxi/Gwittim"
+GITHUB_CODESPACES_GUIDE_URL = (
+    "https://github.com/lyn0109-Toxi/Gwittim/blob/main/docs/github-codespaces.md"
+)
 
 
 st.set_page_config(
@@ -26,6 +31,7 @@ def init_state():
         "last_english": "원문 영어는 여기에 함께 표시됩니다.",
         "reply_suggestion": "추천 영어 답변이 여기에 표시됩니다.",
         "session_api_key": "",
+        "active_session": "텍스트 세션",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -52,8 +58,20 @@ def get_settings():
 
     with st.sidebar:
         st.markdown("### Session")
-        st.success("텍스트 번역 전용")
-        st.caption("통역 목소리 출력은 꺼져 있습니다.")
+        active_session = st.radio(
+            "들어갈 세션",
+            options=["텍스트 세션", "통역 세션"],
+            index=0 if st.session_state.active_session == "텍스트 세션" else 1,
+            horizontal=True,
+        )
+        st.session_state.active_session = active_session
+
+        if active_session == "텍스트 세션":
+            st.success("텍스트 번역 전용")
+            st.caption("통역 목소리 출력은 꺼져 있습니다.")
+        else:
+            st.success("실시간 통역 세션")
+            st.caption("마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
 
         if configured_key:
             st.success("API key connected from Secrets")
@@ -100,6 +118,7 @@ def get_settings():
         "api_key": api_key,
         "key_from_secret": bool(configured_key),
         "key_source": key_source,
+        "active_session": active_session,
         "model": normalize_model_name(selected_model) or DEFAULT_MODEL,
         "translation_target": selected_target.strip() or "ko",
         "save_audio": save_audio,
@@ -218,18 +237,23 @@ def render_header(settings):
     left, right = st.columns([0.74, 0.26], vertical_alignment="center")
     with left:
         st.caption("Gwittim")
-        st.title("조용히 읽고, 필요한 순간만 귀띔합니다.")
-        st.write("영어 문장을 한국어로 번역하고, 필요한 답변을 영어로 다듬는 텍스트 전용 배포 앱입니다.")
-        st.info("현재 모드: 텍스트 번역 전용. 통역 목소리는 출력하지 않습니다.")
+        if settings["active_session"] == "통역 세션":
+            st.title("조용히 듣고, 필요한 순간만 귀띔합니다.")
+            st.write("실시간 영어 대화를 한국어 문장 번역으로 따라가는 통역 세션입니다.")
+            st.info("Streamlit에서는 실행 입구를 제공하고, 실제 마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
+        else:
+            st.title("조용히 읽고, 필요한 순간만 귀띔합니다.")
+            st.write("영어 문장을 한국어로 번역하고, 필요한 답변을 영어로 다듬는 텍스트 세션입니다.")
+            st.info("현재 모드: 텍스트 번역 전용. 통역 목소리는 출력하지 않습니다.")
     with right:
         if settings["api_key"]:
             st.success("Gemini ready")
         else:
             st.error("API key required")
         st.caption(f"Model: {settings['model']}")
-        st.caption(APP_MODE)
+        st.caption(settings["active_session"] if settings["active_session"] == "통역 세션" else APP_MODE)
 
-    if not settings["api_key"]:
+    if settings["active_session"] == "텍스트 세션" and not settings["api_key"]:
         st.warning("왼쪽 사이드바에서 Gemini API key를 한 번 붙여넣고 `API key 한번에 적용`을 눌러주세요.")
 
 
@@ -330,18 +354,62 @@ def render_assistant_panel(settings):
         st.rerun()
 
 
-def main():
-    init_state()
-    settings = get_settings()
-    render_header(settings)
-
-    st.caption("Streamlit 배포 화면은 텍스트 입력 기반으로 동작합니다. 음성 출력은 비활성화되어 있습니다.")
-
+def render_text_session(settings):
+    st.caption("텍스트 세션은 Streamlit 안에서 바로 번역합니다. 음성 출력은 비활성화되어 있습니다.")
     main_col, side_col = st.columns([0.64, 0.36], gap="large")
     with main_col:
         render_live_panel(settings)
     with side_col:
         render_assistant_panel(settings)
+
+
+def render_interpretation_session(settings):
+    st.subheader("실시간 통역 세션 열기")
+    st.write(
+        "실시간 마이크 통역은 작은 Node 서버가 필요합니다. 아래 둘 중 하나로 열 수 있습니다."
+    )
+
+    local_col, github_col = st.columns(2, gap="large")
+
+    with local_col:
+        st.markdown("#### 내 Mac에서 열기")
+        st.code(
+            "\n".join(
+                [
+                    "cd /Users/leeyoung-nam/Documents/Translater",
+                    "npm run doctor",
+                    "npm start",
+                ]
+            ),
+            language="bash",
+        )
+        st.link_button("로컬 통역 세션 열기", LOCAL_REALTIME_URL, use_container_width=True)
+        st.caption("이미 서버가 켜져 있으면 바로 열립니다. 꺼져 있으면 위 명령을 먼저 실행하세요.")
+
+    with github_col:
+        st.markdown("#### GitHub Codespaces에서 열기")
+        st.write("GitHub 저장소에서 임시 클라우드 개발환경을 만들고, 3000번 포트를 열어 통역 세션에 들어갑니다.")
+        st.link_button("Codespaces 안내 보기", GITHUB_CODESPACES_GUIDE_URL, use_container_width=True)
+        st.link_button("GitHub 저장소 열기", GITHUB_REPO_URL, use_container_width=True)
+        st.caption("Codespaces에는 `GEMINI_API_KEY`를 Codespaces Secret으로 넣어야 합니다.")
+
+    st.divider()
+    st.markdown("#### 통역 세션 흐름")
+    st.write("1. 통역 앱 열기")
+    st.write("2. `통역 시작` 클릭")
+    st.write("3. 마이크 권한 허용")
+    st.write("4. 영어로 말하면 한국어 문장 번역 표시")
+
+
+def main():
+    init_state()
+    settings = get_settings()
+    render_header(settings)
+
+    if settings["active_session"] == "통역 세션":
+        render_interpretation_session(settings)
+    else:
+        render_text_session(settings)
 
 
 if __name__ == "__main__":

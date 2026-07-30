@@ -88,7 +88,12 @@ GEMINI_TRANSLATION_TARGET = "ko"
 
 If Secrets are not configured yet, the deployed Streamlit app also lets you paste a Gemini API key once in the sidebar and apply it for the current browser session.
 
-The Streamlit version is a deployable text-input preview. The local Node version is the realtime microphone interpreter.
+The Streamlit version has two entry points:
+
+- `텍스트 세션`: translate typed English text into Korean and compose English replies.
+- `통역 세션`: open the realtime microphone interpreter through the local Node app or GitHub Codespaces.
+
+The local Node version is the realtime microphone interpreter.
 
 ## Product Direction
 
