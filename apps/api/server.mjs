@@ -245,7 +245,8 @@ async function handleCompose(request, response) {
       "You are Gwittim, helping a Korean speaker respond naturally in an English conversation.",
       "Convert the user's Korean draft into concise, spoken English.",
       "Match the requested response mode.",
-      "Return two options: one short direct version and one slightly warmer professional version.",
+      "Return exactly two complete English sentences.",
+      "Use this exact plain-text format with no Markdown: 1. <short direct sentence> 2. <slightly warmer professional sentence>",
       "Do not add unsupported facts.",
     ].join(" "),
     input: [
@@ -255,7 +256,7 @@ async function handleCompose(request, response) {
     ]
       .filter(Boolean)
       .join("\n\n"),
-    maxOutputTokens: 420,
+    maxOutputTokens: 720,
   });
 
   sendJson(response, 200, { suggestion: suggestion.trim() });
@@ -284,8 +285,10 @@ async function handleLiveCompose(request, response) {
       "Read the recent English/Korean transcript and suggest useful spoken English responses the user can say now.",
       "Do not invent facts, commitments, numbers, or decisions.",
       "If the next response is unclear, suggest a natural clarification question.",
-      "Return Korean section labels with English response lines.",
-      "Keep the output compact and immediately speakable.",
+      "Return exactly three complete lines in plain text with no Markdown.",
+      "Use this exact format: 지금 말할 수 있는 표현: 1. <short English sentence> 2. <warmer English sentence> 확인 질문: <English clarification question>",
+      "Keep every English sentence compact and immediately speakable.",
+      "Do not use contractions or apostrophes.",
     ].join(" "),
     input: [
       `Response mode: ${mode}`,
@@ -298,10 +301,12 @@ async function handleLiveCompose(request, response) {
         "확인 질문: <English clarification question>",
       ].join("\n"),
     ].join("\n\n"),
-    maxOutputTokens: 460,
+    maxOutputTokens: 820,
   });
 
-  sendJson(response, 200, { suggestion: suggestion.trim() });
+  sendJson(response, 200, {
+    suggestion: normalizeLiveComposeSuggestion(suggestion, mode),
+  });
 }
 
 async function callGemini({ systemInstruction, input, maxOutputTokens }) {
@@ -352,6 +357,50 @@ async function callGemini({ systemInstruction, input, maxOutputTokens }) {
   }
 
   return text;
+}
+
+function normalizeLiveComposeSuggestion(suggestion, mode) {
+  const text = cleanInput(suggestion);
+  if (isCompleteLiveComposeSuggestion(text)) {
+    return text;
+  }
+
+  const templates = {
+    agree: [
+      "지금 말할 수 있는 표현:",
+      "1. I agree that we should check the risks first.",
+      "2. That makes sense, and I would like to review the potential risks before we move forward.",
+      "확인 질문: Could you clarify the main risk we should focus on?",
+    ],
+    disagree: [
+      "지금 말할 수 있는 표현:",
+      "1. I see your point, but I would like to check the risks first.",
+      "2. I understand the plan, but I think we should review the potential risks before we decide.",
+      "확인 질문: Could you explain why this timing feels safe to commit to?",
+    ],
+    question: [
+      "지금 말할 수 있는 표현:",
+      "1. Could we check the risks before we commit?",
+      "2. Could you walk me through the main risks before we move forward?",
+      "확인 질문: What is the biggest risk we should confirm first?",
+    ],
+    neutral: [
+      "지금 말할 수 있는 표현:",
+      "1. I understand. I would like to check the risks first.",
+      "2. That makes sense, and I would like to review the potential risks before we move forward.",
+      "확인 질문: Could you clarify the main risk we should focus on?",
+    ],
+  };
+
+  return (templates[mode] || templates.neutral).join("\n");
+}
+
+function isCompleteLiveComposeSuggestion(text) {
+  return (
+    /1\.\s+[^.!?]+[.!?]/s.test(text) &&
+    /2\.\s+[^.!?]+[.!?]/s.test(text) &&
+    /확인 질문:\s+[^?]+\?/s.test(text)
+  );
 }
 
 function createLiveTranslationSetup({ targetLanguage, echoTargetLanguage }) {

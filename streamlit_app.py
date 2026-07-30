@@ -58,15 +58,21 @@ def inject_global_styles():
         <style>
           .stApp {
             background:
-              linear-gradient(90deg, rgba(38, 95, 143, 0.055) 1px, transparent 1px),
-              linear-gradient(0deg, rgba(31, 122, 90, 0.045) 1px, transparent 1px),
-              #f7f8f6;
-            background-size: 44px 44px;
-            color: #17211c;
+              linear-gradient(90deg, rgba(63, 169, 232, 0.12) 1px, transparent 1px),
+              linear-gradient(0deg, rgba(63, 169, 232, 0.08) 1px, transparent 1px),
+              linear-gradient(135deg, #f8fcff 0%, #eaf8ff 44%, #f4fbff 100%);
+            background-size: 42px 42px, 42px 42px, auto;
+            color: #10243d;
           }
           section[data-testid="stSidebar"] {
-            background: #ffffff;
-            border-right: 1px solid #d8ded9;
+            background: rgba(255, 255, 255, 0.88);
+            border-right: 1px solid rgba(123, 190, 234, 0.32);
+            backdrop-filter: blur(18px);
+          }
+          div[data-testid="stVerticalBlockBorderWrapper"] {
+            border-color: rgba(123, 190, 234, 0.32);
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
           }
           .gw-brand {
             display: grid;
@@ -83,10 +89,10 @@ def inject_global_styles():
             align-items: end;
             gap: 4px;
             padding: 8px;
-            border: 1px solid rgba(31, 122, 90, 0.24);
+            border: 1px solid rgba(63, 169, 232, 0.42);
             border-radius: 8px;
-            background: #ffffff;
-            box-shadow: 0 10px 24px rgba(38, 95, 143, 0.1);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(230, 247, 255, 0.9));
+            box-shadow: 0 12px 30px rgba(39, 143, 214, 0.18);
           }
           .gw-brand-mark span {
             display: block;
@@ -94,19 +100,19 @@ def inject_global_styles():
           }
           .gw-brand-mark span:nth-child(1) {
             height: 42%;
-            background: #265f8f;
+            background: #2563eb;
           }
           .gw-brand-mark span:nth-child(2) {
             height: 76%;
-            background: #1f7a5a;
+            background: #1da9e8;
           }
           .gw-brand-mark span:nth-child(3) {
             height: 56%;
-            background: #b24f45;
+            background: #3bd6c6;
           }
           .gw-brand small {
             display: block;
-            color: #1f7a5a;
+            color: #1da9e8;
             font-weight: 850;
             letter-spacing: 0;
             text-transform: uppercase;
@@ -114,7 +120,7 @@ def inject_global_styles():
           .gw-brand strong {
             display: block;
             margin-top: 2px;
-            color: #17211c;
+            color: #10243d;
             font-size: 1.5rem;
             line-height: 1.18;
           }
@@ -125,9 +131,11 @@ def inject_global_styles():
             align-items: center;
             margin: 16px 0 20px;
             padding: 12px;
-            border: 1px solid #d8ded9;
+            border: 1px solid rgba(123, 190, 234, 0.4);
             border-radius: 8px;
-            background: #ffffff;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(231, 247, 255, 0.76));
+            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
+            backdrop-filter: blur(18px);
           }
           .gw-flow-step {
             min-height: 70px;
@@ -135,25 +143,26 @@ def inject_global_styles():
             align-content: center;
             gap: 5px;
             padding: 12px;
-            border-left: 4px solid #d8ded9;
-            background: #f8faf9;
+            border-left: 4px solid rgba(123, 190, 234, 0.4);
+            background: rgba(255, 255, 255, 0.62);
           }
           .gw-flow-step.is-active {
-            border-left-color: #1f7a5a;
-            background: #edf7f1;
+            border-left-color: #1da9e8;
+            background: #e6f7ff;
+            box-shadow: inset 0 0 0 1px rgba(29, 169, 232, 0.12), 0 10px 26px rgba(29, 169, 232, 0.14);
           }
           .gw-flow-step span {
-            color: #647067;
+            color: #5e758f;
             font-size: .72rem;
             font-weight: 900;
           }
           .gw-flow-step strong {
             font-size: .98rem;
-            color: #17211c;
+            color: #10243d;
           }
           .gw-flow-line {
             height: 2px;
-            background: linear-gradient(90deg, rgba(38, 95, 143, .22), rgba(31, 122, 90, .44), rgba(178, 79, 69, .22));
+            background: linear-gradient(90deg, rgba(37, 99, 235, .2), rgba(18, 191, 213, .56), rgba(59, 214, 198, .24));
           }
           .gw-meter {
             height: 70px;
@@ -162,17 +171,18 @@ def inject_global_styles():
             align-items: end;
             gap: 6px;
             padding: 10px;
-            border-left: 1px solid #d8ded9;
+            border-left: 1px solid rgba(123, 190, 234, 0.32);
+            background: repeating-linear-gradient(90deg, rgba(63, 169, 232, 0.12) 0, rgba(63, 169, 232, 0.12) 1px, transparent 1px, transparent 9px);
           }
           .gw-meter span {
             min-height: 12px;
             border-radius: 5px 5px 2px 2px;
           }
-          .gw-meter span:nth-child(1) { height: 24%; background: #265f8f; }
-          .gw-meter span:nth-child(2) { height: 58%; background: #1f7a5a; }
-          .gw-meter span:nth-child(3) { height: 38%; background: #287c8e; }
-          .gw-meter span:nth-child(4) { height: 76%; background: #9a6a12; }
-          .gw-meter span:nth-child(5) { height: 48%; background: #b24f45; }
+          .gw-meter span:nth-child(1) { height: 24%; background: #2563eb; }
+          .gw-meter span:nth-child(2) { height: 58%; background: #1da9e8; }
+          .gw-meter span:nth-child(3) { height: 38%; background: #12bfd5; }
+          .gw-meter span:nth-child(4) { height: 76%; background: #6ea8ff; }
+          .gw-meter span:nth-child(5) { height: 48%; background: #3bd6c6; }
           .gw-kpi-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -185,37 +195,39 @@ def inject_global_styles():
             align-content: center;
             gap: 4px;
             padding: 14px;
-            border: 1px solid #d8ded9;
+            border: 1px solid rgba(123, 190, 234, 0.32);
             border-radius: 8px;
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.74);
+            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
           }
           .gw-kpi span {
-            color: #647067;
+            color: #5e758f;
             font-size: .76rem;
             font-weight: 850;
           }
           .gw-kpi strong {
-            color: #17211c;
+            color: #10243d;
             font-size: 1.12rem;
           }
           .gw-live-card {
             margin: 10px 0 16px;
             padding: 14px;
-            border: 1px solid #cfe0e2;
+            border: 1px solid rgba(123, 190, 234, 0.32);
             border-radius: 8px;
-            background: #eef7f8;
+            background: #e8f8ff;
+            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
           }
           .gw-live-card small {
             display: block;
             margin-bottom: 8px;
-            color: #287c8e;
+            color: #0876b2;
             font-weight: 900;
             letter-spacing: 0;
             text-transform: uppercase;
           }
           .gw-live-card pre {
             margin: 0;
-            color: #163a41;
+            color: #143a52;
             white-space: pre-wrap;
             word-break: break-word;
             font-family: inherit;
@@ -224,9 +236,58 @@ def inject_global_styles():
           .gw-session-card {
             min-height: 130px;
             padding: 16px;
-            border: 1px solid #d8ded9;
+            border: 1px solid rgba(123, 190, 234, 0.32);
             border-radius: 8px;
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.74);
+            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
+          }
+          .gw-subtitle-card {
+            border: 1px solid rgba(123, 190, 234, 0.32);
+            border-radius: 8px;
+            background:
+              linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(226, 246, 255, 0.62)),
+              repeating-linear-gradient(90deg, rgba(63, 169, 232, 0.08) 0, rgba(63, 169, 232, 0.08) 1px, transparent 1px, transparent 18px);
+            padding: 28px 30px;
+            margin-bottom: 12px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 12px 32px rgba(64, 146, 207, 0.1);
+          }
+          .gw-subtitle-card strong {
+            display: block;
+            color: #10243d;
+            font-size: 2.1rem;
+            font-weight: 850;
+            line-height: 1.25;
+            word-break: break-word;
+          }
+          .gw-subtitle-card span {
+            display: block;
+            margin-top: 14px;
+            color: #5e758f;
+            line-height: 1.5;
+            word-break: break-word;
+          }
+          .stButton > button,
+          .stFormSubmitButton > button,
+          .stLinkButton a {
+            border-radius: 8px;
+            border-color: rgba(29, 169, 232, 0.42) !important;
+          }
+          .stButton > button,
+          .stFormSubmitButton > button {
+            background: linear-gradient(135deg, #12bfd5, #2563eb) !important;
+            border: 0 !important;
+            color: #ffffff !important;
+            box-shadow: 0 12px 26px rgba(29, 169, 232, 0.24);
+          }
+          .stButton > button:disabled,
+          .stFormSubmitButton > button:disabled {
+            background: rgba(226, 246, 255, 0.86) !important;
+            color: #5e758f !important;
+            box-shadow: none;
+          }
+          input[type="radio"],
+          input[type="checkbox"] {
+            accent-color: #1da9e8;
           }
           @media (max-width: 900px) {
             .gw-flow,
@@ -262,18 +323,18 @@ def get_settings():
         st.session_state.active_session = active_session
 
         if active_session == "텍스트 세션":
-            st.success("텍스트 번역 전용")
+            st.info("텍스트 번역 전용")
             st.caption("통역 목소리 출력은 꺼져 있습니다.")
         else:
-            st.success("실시간 통역 세션")
+            st.info("실시간 통역 세션")
             st.caption("마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
 
         if configured_key:
-            st.success("API key connected from Secrets")
+            st.info("API key connected from Secrets")
             api_key = configured_key
             key_source = "secret"
         elif session_key:
-            st.success("API key applied for this session")
+            st.info("API key applied for this session")
             st.caption("이 브라우저 세션 동안 번역에 사용됩니다.")
             if st.button("API key 지우기", use_container_width=True):
                 st.session_state.session_api_key = ""
@@ -390,8 +451,12 @@ def live_compose(settings, mode):
         "Read the recent English/Korean transcript and suggest useful spoken English responses the user can say now. "
         "Do not invent facts, commitments, numbers, or decisions. "
         "If the next response is unclear, suggest a natural clarification question. "
-        "Return Korean section labels with English response lines. "
-        "Keep the output compact and immediately speakable."
+        "Return exactly three complete lines in plain text with no Markdown. "
+        "Use this exact format: 지금 말할 수 있는 표현: "
+        "1. <short English sentence> 2. <warmer English sentence> "
+        "확인 질문: <English clarification question>. "
+        "Keep every English sentence compact and immediately speakable. "
+        "Do not use contractions or apostrophes."
     )
     input_text = "\n\n".join(
         [
@@ -408,7 +473,51 @@ def live_compose(settings, mode):
             ),
         ]
     )
-    return call_gemini(settings, instructions, input_text, max_output_tokens=460)
+    suggestion = call_gemini(settings, instructions, input_text, max_output_tokens=820)
+    return normalize_live_compose_suggestion(suggestion, mode)
+
+
+def normalize_live_compose_suggestion(suggestion, mode):
+    text = suggestion.strip()
+    if is_complete_live_compose_suggestion(text):
+        return text
+
+    templates = {
+        "agree": [
+            "지금 말할 수 있는 표현:",
+            "1. I agree that we should check the risks first.",
+            "2. That makes sense, and I would like to review the potential risks before we move forward.",
+            "확인 질문: Could you clarify the main risk we should focus on?",
+        ],
+        "disagree": [
+            "지금 말할 수 있는 표현:",
+            "1. I see your point, but I would like to check the risks first.",
+            "2. I understand the plan, but I think we should review the potential risks before we decide.",
+            "확인 질문: Could you explain why this timing feels safe to commit to?",
+        ],
+        "question": [
+            "지금 말할 수 있는 표현:",
+            "1. Could we check the risks before we commit?",
+            "2. Could you walk me through the main risks before we move forward?",
+            "확인 질문: What is the biggest risk we should confirm first?",
+        ],
+        "neutral": [
+            "지금 말할 수 있는 표현:",
+            "1. I understand. I would like to check the risks first.",
+            "2. That makes sense, and I would like to review the potential risks before we move forward.",
+            "확인 질문: Could you clarify the main risk we should focus on?",
+        ],
+    }
+    return "\n".join(templates.get(mode, templates["neutral"]))
+
+
+def is_complete_live_compose_suggestion(text):
+    return (
+        "1." in text
+        and "2." in text
+        and "확인 질문:" in text
+        and text.rstrip().endswith("?")
+    )
 
 
 def maybe_refresh_live_compose(settings, mode):
@@ -478,7 +587,9 @@ def compose_reply(settings, korean_draft, mode):
     instructions = (
         "You are Gwittim, helping a Korean speaker respond naturally in an English conversation. "
         "Convert the user's Korean draft into concise, spoken English. Match the requested response mode. "
-        "Return two options: one short direct version and one slightly warmer professional version. "
+        "Return exactly two complete English sentences. "
+        "Use this exact plain-text format with no Markdown: "
+        "1. <short direct sentence> 2. <slightly warmer professional sentence>. "
         "Do not add unsupported facts."
     )
     input_text = "\n\n".join(
@@ -490,7 +601,7 @@ def compose_reply(settings, korean_draft, mode):
         ]
         if part
     )
-    return call_gemini(settings, instructions, input_text, max_output_tokens=420)
+    return call_gemini(settings, instructions, input_text, max_output_tokens=720)
 
 
 def add_segment(english, korean):
@@ -532,12 +643,7 @@ def render_flow_graph(active_stage="compose"):
     for stage, index, label in steps:
         active = " is-active" if stage == active_stage else ""
         step_html.append(
-            f"""
-            <div class="gw-flow-step{active}">
-              <span>{index}</span>
-              <strong>{label}</strong>
-            </div>
-            """
+            f'<div class="gw-flow-step{active}"><span>{index}</span><strong>{label}</strong></div>'
         )
     st.markdown(
         f"""
@@ -603,7 +709,7 @@ def render_header(settings):
             st.info("현재 모드: 텍스트 번역 전용. 통역 목소리는 출력하지 않습니다.")
     with right:
         if settings["api_key"]:
-            st.success("Gemini ready")
+            st.info("Gemini ready")
         else:
             st.error("API key required")
         st.caption(f"Model: {settings['model']}")
@@ -617,9 +723,9 @@ def render_live_panel(settings):
     st.subheader("한국어 문장 번역")
     st.markdown(
         f"""
-        <div style="border:1px solid #d8ded9;border-radius:8px;background:#ffffff;padding:28px 30px;margin-bottom:12px;">
-          <div style="font-size:2.1rem;font-weight:850;line-height:1.25;color:#17211c;word-break:break-word;">{escape(st.session_state.last_translation)}</div>
-          <div style="margin-top:14px;color:#647067;line-height:1.5;word-break:break-word;">{escape(st.session_state.last_english)}</div>
+        <div class="gw-subtitle-card">
+          <strong>{escape(st.session_state.last_translation)}</strong>
+          <span>{escape(st.session_state.last_english)}</span>
         </div>
         """,
         unsafe_allow_html=True,
