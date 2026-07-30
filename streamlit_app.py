@@ -25,6 +25,7 @@ def init_state():
         "last_translation": "영어 문장을 입력하면 한국어 문장 번역으로 표시됩니다.",
         "last_english": "원문 영어는 여기에 함께 표시됩니다.",
         "reply_suggestion": "추천 영어 답변이 여기에 표시됩니다.",
+        "session_api_key": "",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -43,6 +44,7 @@ def normalize_model_name(model):
 
 def get_settings():
     configured_key = secret_value("GEMINI_API_KEY", "")
+    session_key = st.session_state.get("session_api_key", "")
     model = secret_value("GEMINI_TEXT_MODEL", os.getenv("GEMINI_TEXT_MODEL", DEFAULT_MODEL))
     translation_target = secret_value(
         "GEMINI_TRANSLATION_TARGET", os.getenv("GEMINI_TRANSLATION_TARGET", "ko")
@@ -52,14 +54,42 @@ def get_settings():
         st.markdown("### Session")
         st.success("텍스트 번역 전용")
         st.caption("통역 목소리 출력은 꺼져 있습니다.")
-        st.caption("Streamlit Cloud에서는 Settings > Secrets에 Gemini API 키를 넣으면 됩니다.")
-        entered_key = st.text_input(
-            "Gemini API key",
-            value="",
-            type="password",
-            placeholder="AIza...",
-            help="Secrets에 키가 없을 때만 임시로 입력하세요.",
-        )
+
+        if configured_key:
+            st.success("API key connected from Secrets")
+            api_key = configured_key
+            key_source = "secret"
+        elif session_key:
+            st.success("API key applied for this session")
+            st.caption("이 브라우저 세션 동안 번역에 사용됩니다.")
+            if st.button("API key 지우기", use_container_width=True):
+                st.session_state.session_api_key = ""
+                st.rerun()
+            api_key = session_key
+            key_source = "session"
+        else:
+            st.caption("Gemini API key를 한 번 붙여넣고 적용하세요.")
+            with st.form("api_key_setup_form"):
+                entered_key = st.text_input(
+                    "Gemini API key",
+                    value="",
+                    type="password",
+                    placeholder="AIza...",
+                    help="Streamlit Secrets가 없을 때 이 브라우저 세션에서만 사용합니다.",
+                )
+                submitted_key = st.form_submit_button("API key 한번에 적용", type="primary")
+
+            if submitted_key:
+                cleaned_key = entered_key.strip()
+                if cleaned_key:
+                    st.session_state.session_api_key = cleaned_key
+                    st.rerun()
+                st.warning("Gemini API key를 먼저 붙여넣어주세요.")
+
+            api_key = ""
+            key_source = "missing"
+
+        st.caption("영구 적용은 Streamlit Cloud Settings > Secrets에서 설정합니다.")
         selected_model = st.text_input("Model", value=model)
         selected_target = st.text_input("Translation target", value=translation_target)
         save_audio = st.toggle("Store raw audio", value=False, disabled=True)
@@ -67,8 +97,9 @@ def get_settings():
         st.caption("현재 배포 앱은 오디오를 저장하지 않고, 통역 음성도 출력하지 않습니다.")
 
     return {
-        "api_key": entered_key or configured_key,
+        "api_key": api_key,
         "key_from_secret": bool(configured_key),
+        "key_source": key_source,
         "model": normalize_model_name(selected_model) or DEFAULT_MODEL,
         "translation_target": selected_target.strip() or "ko",
         "save_audio": save_audio,
@@ -78,7 +109,7 @@ def get_settings():
 
 def call_gemini(settings, instructions, input_text, max_output_tokens=360):
     if not settings["api_key"]:
-        raise RuntimeError("GEMINI_API_KEY가 필요합니다. Streamlit Secrets 또는 사이드바에 입력해주세요.")
+        raise RuntimeError("Gemini API key가 필요합니다. 사이드바에서 한 번 붙여넣고 적용해주세요.")
 
     payload = {
         "systemInstruction": {"parts": [{"text": instructions}]},
@@ -197,6 +228,9 @@ def render_header(settings):
             st.error("API key required")
         st.caption(f"Model: {settings['model']}")
         st.caption(APP_MODE)
+
+    if not settings["api_key"]:
+        st.warning("왼쪽 사이드바에서 Gemini API key를 한 번 붙여넣고 `API key 한번에 적용`을 눌러주세요.")
 
 
 def render_live_panel(settings):
