@@ -48,6 +48,24 @@ The browser app streams 16 kHz PCM microphone audio to Gemini Live, receives Eng
 
 For a fuller local checklist, see [Local Run Guide](docs/local-run.md).
 
+## Run From GitHub
+
+GitHub does not host the realtime interpreter as an always-on app by itself, but you can run it from GitHub with Codespaces.
+
+1. Add `GEMINI_API_KEY` as a repository Codespaces secret.
+2. Open the repository on GitHub.
+3. Click `Code` > `Codespaces` > `Create codespace on main`.
+4. Run:
+
+   ```bash
+   npm run doctor
+   npm start
+   ```
+
+5. Open the forwarded port `3000` URL.
+
+See [GitHub Codespaces Run Guide](docs/github-codespaces.md).
+
 ## Streamlit Cloud Deploy
 
 This repository also includes a Streamlit-compatible preview for quick public deployment.

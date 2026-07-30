@@ -60,3 +60,4 @@ Click `통역 시작`, allow microphone access, and speak English.
 - The browser receives only a short-lived Gemini Live API token.
 - Browser microphone access generally requires `localhost`, `127.0.0.1`, or HTTPS.
 - The Streamlit app is only a text-input preview. Use the Node app for realtime voice interpretation.
+- To run from GitHub without installing locally, use [GitHub Codespaces](github-codespaces.md).

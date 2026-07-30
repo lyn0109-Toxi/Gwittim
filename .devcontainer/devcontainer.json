@@ -1,0 +1,18 @@
+{
+  "name": "Gwittim",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "postCreateCommand": "npm run setup",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Gwittim realtime interpreter",
+      "onAutoForward": "openBrowser",
+      "protocol": "http"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": []
+    }
+  }
+}
