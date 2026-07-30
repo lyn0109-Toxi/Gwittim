@@ -66,6 +66,10 @@ const server = createServer(async (request, response) => {
       return await handleCompose(request, response);
     }
 
+    if (request.method === "POST" && url.pathname === "/api/live-compose") {
+      return await handleLiveCompose(request, response);
+    }
+
     if (request.method === "POST" && url.pathname === "/api/gemini/live-token") {
       return await handleGeminiLiveToken(request, response);
     }
@@ -252,6 +256,49 @@ async function handleCompose(request, response) {
       .filter(Boolean)
       .join("\n\n"),
     maxOutputTokens: 420,
+  });
+
+  sendJson(response, 200, { suggestion: suggestion.trim() });
+}
+
+async function handleLiveCompose(request, response) {
+  const body = await readJson(request);
+  const mode = cleanInput(body.mode || "neutral");
+  const segments = Array.isArray(body.segments) ? body.segments.slice(-10) : [];
+
+  if (segments.length === 0) {
+    return sendJson(response, 400, { error: "Segments are required" });
+  }
+
+  const transcript = segments
+    .map((item, index) => {
+      const english = cleanInput(item.english);
+      const korean = cleanInput(item.korean);
+      return `${index + 1}. EN: ${english}\n   KO: ${korean}`;
+    })
+    .join("\n");
+
+  const suggestion = await callGemini({
+    systemInstruction: [
+      "You are Gwittim, a discreet live response coach for a Korean speaker in an English conversation.",
+      "Read the recent English/Korean transcript and suggest useful spoken English responses the user can say now.",
+      "Do not invent facts, commitments, numbers, or decisions.",
+      "If the next response is unclear, suggest a natural clarification question.",
+      "Return Korean section labels with English response lines.",
+      "Keep the output compact and immediately speakable.",
+    ].join(" "),
+    input: [
+      `Response mode: ${mode}`,
+      `Recent live conversation:\n${transcript}`,
+      [
+        "Return this structure:",
+        "지금 말할 수 있는 표현",
+        "1. <short English sentence>",
+        "2. <slightly warmer English sentence>",
+        "확인 질문: <English clarification question>",
+      ].join("\n"),
+    ].join("\n\n"),
+    maxOutputTokens: 460,
   });
 
   sendJson(response, 200, { suggestion: suggestion.trim() });

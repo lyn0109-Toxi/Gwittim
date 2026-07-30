@@ -9,7 +9,12 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
           <p class="eyebrow">Gwittim</p>
           <h1>조용히 듣고, 필요한 순간만 귀띔합니다.</h1>
         </div>
@@ -28,6 +33,45 @@
               <h2 id="liveTitle">한국어 자막</h2>
             </div>
             <span id="listeningBadge" class="listening-badge">대기</span>
+          </div>
+
+          <div class="signal-board" aria-label="통역 상태">
+            <div class="signal-step is-active" data-stage="listen">
+              <span class="signal-index">01</span>
+              <strong>Listen</strong>
+            </div>
+            <div class="signal-line" aria-hidden="true"></div>
+            <div class="signal-step" data-stage="translate">
+              <span class="signal-index">02</span>
+              <strong>Translate</strong>
+            </div>
+            <div class="signal-line" aria-hidden="true"></div>
+            <div class="signal-step" data-stage="compose">
+              <span class="signal-index">03</span>
+              <strong>Compose</strong>
+            </div>
+            <div class="signal-meter" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+
+          <div class="stats-grid" aria-label="세션 통계">
+            <div>
+              <span>문장</span>
+              <strong id="segmentCount">0</strong>
+            </div>
+            <div>
+              <span>최근 귀띔</span>
+              <strong id="cueStatus">대기</strong>
+            </div>
+            <div>
+              <span>출력</span>
+              <strong>Text</strong>
+            </div>
           </div>
 
           <div class="subtitle-box">
@@ -51,6 +95,15 @@
             <div class="panel-heading">
               <p class="panel-label">Compose</p>
               <h2 id="composeTitle">답변 귀띔</h2>
+              <span id="liveComposeStatus" class="mini-status">자동 대기</span>
+            </div>
+            <label class="toggle-row">
+              <input id="liveComposeToggle" type="checkbox" checked />
+              <span>실시간 귀띔</span>
+            </label>
+            <div class="live-cue">
+              <p class="cue-label">Live Cue</p>
+              <pre id="liveComposeOutput" class="live-compose-output">통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다.</pre>
             </div>
             <div class="mode-grid" role="group" aria-label="답변 모드">
               <button class="mode-button is-active" data-mode="neutral" type="button">일반</button>

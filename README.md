@@ -90,8 +90,8 @@ If Secrets are not configured yet, the deployed Streamlit app also lets you past
 
 The Streamlit version has two entry points:
 
-- `텍스트 세션`: translate typed English text into Korean and compose English replies.
-- `통역 세션`: open the realtime microphone interpreter through the local Node app or GitHub Codespaces.
+- `텍스트 세션`: translate typed English text into Korean and generate live Compose cues.
+- `통역 세션`: open the realtime microphone interpreter through the local Node app or GitHub Codespaces, with text-only subtitles and live Compose cues.
 
 The local Node version is the realtime microphone interpreter.
 
@@ -118,6 +118,7 @@ The first version should prove the real-time loop:
 4. Render Korean subtitle-style output.
 5. Keep a short rolling transcript.
 6. Generate a brief conversation summary.
+7. Generate live English response cues while interpretation is running.
 
 ## Repository Layout
 

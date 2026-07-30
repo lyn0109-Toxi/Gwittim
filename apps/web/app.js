@@ -12,6 +12,9 @@ const state = {
   selectedMode: "neutral",
   segments: [],
   pendingSummaryAt: 0,
+  liveComposeTimer: null,
+  liveComposeRequestId: 0,
+  liveComposeSignature: "",
   config: null,
   activeInputTranscript: "",
   activeOutputTranscript: "",
@@ -28,10 +31,16 @@ const elements = {
   koreanSubtitle: document.querySelector("#koreanSubtitle"),
   englishInterim: document.querySelector("#englishInterim"),
   transcriptList: document.querySelector("#transcriptList"),
+  segmentCount: document.querySelector("#segmentCount"),
+  cueStatus: document.querySelector("#cueStatus"),
   summaryBox: document.querySelector("#summaryBox"),
   composeInput: document.querySelector("#composeInput"),
   composeButton: document.querySelector("#composeButton"),
   composeOutput: document.querySelector("#composeOutput"),
+  liveComposeToggle: document.querySelector("#liveComposeToggle"),
+  liveComposeStatus: document.querySelector("#liveComposeStatus"),
+  liveComposeOutput: document.querySelector("#liveComposeOutput"),
+  signalSteps: [...document.querySelectorAll(".signal-step")],
   modeButtons: [...document.querySelectorAll(".mode-button")],
   modelName: document.querySelector("#modelName"),
   speechSupport: document.querySelector("#speechSupport"),
@@ -66,12 +75,23 @@ function bindEvents() {
   });
   elements.composeButton.addEventListener("click", composeResponse);
   elements.clearButton.addEventListener("click", clearSession);
+  elements.liveComposeToggle.addEventListener("change", () => {
+    if (elements.liveComposeToggle.checked) {
+      setLiveComposeStatus("자동 대기", "idle");
+      scheduleLiveCompose();
+    } else {
+      state.liveComposeRequestId += 1;
+      clearLiveComposeTimer();
+      setLiveComposeStatus("꺼짐", "idle");
+    }
+  });
 
   elements.modeButtons.forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedMode = button.dataset.mode || "neutral";
       elements.modeButtons.forEach((item) => item.classList.remove("is-active"));
       button.classList.add("is-active");
+      scheduleLiveCompose({ force: true });
     });
   });
 }
@@ -240,6 +260,7 @@ function resetRealtimeState() {
   state.activeOutputTranscript = "";
   state.lastFinalizedKorean = "";
   clearFinalizeTimer();
+  clearLiveComposeTimer();
 }
 
 function createAudioContext() {
@@ -395,6 +416,7 @@ async function handleGeminiMessage(rawData) {
 
   const inputText = serverContent.inputTranscription?.text;
   if (inputText) {
+    setSignalStage("listen");
     state.activeInputTranscript = mergeTranscript(
       state.activeInputTranscript,
       inputText,
@@ -405,6 +427,7 @@ async function handleGeminiMessage(rawData) {
 
   const outputText = serverContent.outputTranscription?.text;
   if (outputText) {
+    setSignalStage("translate");
     state.activeOutputTranscript = mergeTranscript(
       state.activeOutputTranscript,
       outputText,
@@ -420,6 +443,7 @@ async function handleGeminiMessage(rawData) {
     .join("");
 
   if (textParts) {
+    setSignalStage("translate");
     state.activeOutputTranscript = mergeTranscript(
       state.activeOutputTranscript,
       textParts,
@@ -479,6 +503,7 @@ function finalizeRealtimeSegment(text) {
   elements.englishInterim.textContent = english;
   renderTranscript();
   maybeRefreshSummary();
+  scheduleLiveCompose();
 
   state.activeInputTranscript = "";
   state.activeOutputTranscript = "";
@@ -498,6 +523,74 @@ function clearFinalizeTimer() {
     window.clearTimeout(state.finalizeTimer);
     state.finalizeTimer = null;
   }
+}
+
+function scheduleLiveCompose(options = {}) {
+  if (!elements.liveComposeToggle.checked || !state.config?.keyConfigured) {
+    return;
+  }
+
+  if (state.segments.length === 0) {
+    setLiveComposeStatus("자동 대기", "idle");
+    return;
+  }
+
+  const signature = createLiveComposeSignature();
+  if (!options.force && signature === state.liveComposeSignature) {
+    return;
+  }
+
+  clearLiveComposeTimer();
+  setLiveComposeStatus("준비 중", "loading");
+  state.liveComposeTimer = window.setTimeout(() => {
+    void refreshLiveCompose(signature);
+  }, options.force ? 120 : 900);
+}
+
+function clearLiveComposeTimer() {
+  if (state.liveComposeTimer) {
+    window.clearTimeout(state.liveComposeTimer);
+    state.liveComposeTimer = null;
+  }
+}
+
+async function refreshLiveCompose(signature) {
+  const requestId = state.liveComposeRequestId + 1;
+  state.liveComposeRequestId = requestId;
+  setLiveComposeStatus("생성 중", "loading");
+
+  try {
+    const result = await requestJson("/api/live-compose", {
+      method: "POST",
+      body: JSON.stringify({
+        mode: state.selectedMode,
+        segments: state.segments.slice(-10),
+      }),
+    });
+
+    if (requestId !== state.liveComposeRequestId) {
+      return;
+    }
+
+    state.liveComposeSignature = signature;
+    elements.liveComposeOutput.textContent =
+      result.suggestion || "아직 제안할 응답이 없습니다.";
+    setLiveComposeStatus("갱신됨", "ready");
+  } catch (error) {
+    if (requestId !== state.liveComposeRequestId) {
+      return;
+    }
+    elements.liveComposeOutput.textContent = error.message;
+    setLiveComposeStatus("오류", "error");
+  }
+}
+
+function createLiveComposeSignature() {
+  const recentIds = state.segments
+    .slice(-3)
+    .map((segment) => segment.id)
+    .join(":");
+  return `${state.selectedMode}:${recentIds}`;
 }
 
 function maybeRefreshSummary() {
@@ -577,20 +670,31 @@ function renderTranscript() {
     .join("");
 
   elements.transcriptList.innerHTML = items;
+  updateSessionStats();
 }
 
 function clearSession() {
   state.segments = [];
   state.pendingSummaryAt = 0;
+  state.liveComposeSignature = "";
+  state.liveComposeRequestId += 1;
   state.activeInputTranscript = "";
   state.activeOutputTranscript = "";
   state.lastFinalizedKorean = "";
   clearFinalizeTimer();
+  clearLiveComposeTimer();
   elements.koreanSubtitle.textContent = "세션을 지웠습니다.";
   elements.englishInterim.textContent = "새 통역을 시작할 수 있습니다.";
   elements.summaryBox.textContent = "대화가 쌓이면 요약이 갱신됩니다.";
   elements.composeOutput.textContent = "추천 문장이 여기에 표시됩니다.";
+  elements.liveComposeOutput.textContent =
+    "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다.";
+  setLiveComposeStatus(elements.liveComposeToggle.checked ? "자동 대기" : "꺼짐", "idle");
   renderTranscript();
+}
+
+function updateSessionStats() {
+  elements.segmentCount.textContent = String(state.segments.length);
 }
 
 async function requestJson(url, options = {}) {
@@ -672,6 +776,31 @@ function setListening(text, tone) {
   elements.listeningBadge.textContent = text;
   elements.listeningBadge.classList.toggle("is-live", tone === "live");
   elements.listeningBadge.classList.toggle("is-error", tone === "error");
+  document.body.classList.toggle("is-listening", tone === "live");
+  if (tone === "live") {
+    setSignalStage("listen");
+  } else if (tone === "idle") {
+    setSignalStage("listen");
+  }
+}
+
+function setLiveComposeStatus(text, tone) {
+  elements.liveComposeStatus.textContent = text;
+  elements.cueStatus.textContent = text;
+  elements.liveComposeStatus.classList.toggle("is-ready", tone === "ready");
+  elements.liveComposeStatus.classList.toggle("is-loading", tone === "loading");
+  elements.liveComposeStatus.classList.toggle("is-error", tone === "error");
+  if (tone === "ready" || tone === "loading") {
+    setSignalStage("compose");
+  } else if (tone === "idle" && !state.listening) {
+    setSignalStage("listen");
+  }
+}
+
+function setSignalStage(stage) {
+  elements.signalSteps.forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.stage === stage);
+  });
 }
 
 function showError(message) {

@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from html import escape
 
 import requests
 import streamlit as st
@@ -29,7 +30,10 @@ def init_state():
         "summary": "대화가 쌓이면 요약이 갱신됩니다.",
         "last_translation": "영어 문장을 입력하면 한국어 문장 번역으로 표시됩니다.",
         "last_english": "원문 영어는 여기에 함께 표시됩니다.",
+        "live_reply_suggestion": "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다.",
+        "live_reply_signature": "",
         "reply_suggestion": "추천 영어 답변이 여기에 표시됩니다.",
+        "auto_compose": True,
         "session_api_key": "",
         "active_session": "텍스트 세션",
     }
@@ -46,6 +50,197 @@ def secret_value(name, fallback=""):
 
 def normalize_model_name(model):
     return model.strip().removeprefix("models/")
+
+
+def inject_global_styles():
+    st.markdown(
+        """
+        <style>
+          .stApp {
+            background:
+              linear-gradient(90deg, rgba(38, 95, 143, 0.055) 1px, transparent 1px),
+              linear-gradient(0deg, rgba(31, 122, 90, 0.045) 1px, transparent 1px),
+              #f7f8f6;
+            background-size: 44px 44px;
+            color: #17211c;
+          }
+          section[data-testid="stSidebar"] {
+            background: #ffffff;
+            border-right: 1px solid #d8ded9;
+          }
+          .gw-brand {
+            display: grid;
+            grid-template-columns: 48px minmax(0, 1fr);
+            gap: 14px;
+            align-items: center;
+            margin: 4px 0 10px;
+          }
+          .gw-brand-mark {
+            width: 48px;
+            height: 48px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            align-items: end;
+            gap: 4px;
+            padding: 8px;
+            border: 1px solid rgba(31, 122, 90, 0.24);
+            border-radius: 8px;
+            background: #ffffff;
+            box-shadow: 0 10px 24px rgba(38, 95, 143, 0.1);
+          }
+          .gw-brand-mark span {
+            display: block;
+            border-radius: 6px 6px 2px 2px;
+          }
+          .gw-brand-mark span:nth-child(1) {
+            height: 42%;
+            background: #265f8f;
+          }
+          .gw-brand-mark span:nth-child(2) {
+            height: 76%;
+            background: #1f7a5a;
+          }
+          .gw-brand-mark span:nth-child(3) {
+            height: 56%;
+            background: #b24f45;
+          }
+          .gw-brand small {
+            display: block;
+            color: #1f7a5a;
+            font-weight: 850;
+            letter-spacing: 0;
+            text-transform: uppercase;
+          }
+          .gw-brand strong {
+            display: block;
+            margin-top: 2px;
+            color: #17211c;
+            font-size: 1.5rem;
+            line-height: 1.18;
+          }
+          .gw-flow {
+            display: grid;
+            grid-template-columns: minmax(120px, 1fr) 42px minmax(120px, 1fr) 42px minmax(120px, 1fr) minmax(120px, .8fr);
+            gap: 10px;
+            align-items: center;
+            margin: 16px 0 20px;
+            padding: 12px;
+            border: 1px solid #d8ded9;
+            border-radius: 8px;
+            background: #ffffff;
+          }
+          .gw-flow-step {
+            min-height: 70px;
+            display: grid;
+            align-content: center;
+            gap: 5px;
+            padding: 12px;
+            border-left: 4px solid #d8ded9;
+            background: #f8faf9;
+          }
+          .gw-flow-step.is-active {
+            border-left-color: #1f7a5a;
+            background: #edf7f1;
+          }
+          .gw-flow-step span {
+            color: #647067;
+            font-size: .72rem;
+            font-weight: 900;
+          }
+          .gw-flow-step strong {
+            font-size: .98rem;
+            color: #17211c;
+          }
+          .gw-flow-line {
+            height: 2px;
+            background: linear-gradient(90deg, rgba(38, 95, 143, .22), rgba(31, 122, 90, .44), rgba(178, 79, 69, .22));
+          }
+          .gw-meter {
+            height: 70px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            align-items: end;
+            gap: 6px;
+            padding: 10px;
+            border-left: 1px solid #d8ded9;
+          }
+          .gw-meter span {
+            min-height: 12px;
+            border-radius: 5px 5px 2px 2px;
+          }
+          .gw-meter span:nth-child(1) { height: 24%; background: #265f8f; }
+          .gw-meter span:nth-child(2) { height: 58%; background: #1f7a5a; }
+          .gw-meter span:nth-child(3) { height: 38%; background: #287c8e; }
+          .gw-meter span:nth-child(4) { height: 76%; background: #9a6a12; }
+          .gw-meter span:nth-child(5) { height: 48%; background: #b24f45; }
+          .gw-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin: 4px 0 18px;
+          }
+          .gw-kpi {
+            min-height: 78px;
+            display: grid;
+            align-content: center;
+            gap: 4px;
+            padding: 14px;
+            border: 1px solid #d8ded9;
+            border-radius: 8px;
+            background: #ffffff;
+          }
+          .gw-kpi span {
+            color: #647067;
+            font-size: .76rem;
+            font-weight: 850;
+          }
+          .gw-kpi strong {
+            color: #17211c;
+            font-size: 1.12rem;
+          }
+          .gw-live-card {
+            margin: 10px 0 16px;
+            padding: 14px;
+            border: 1px solid #cfe0e2;
+            border-radius: 8px;
+            background: #eef7f8;
+          }
+          .gw-live-card small {
+            display: block;
+            margin-bottom: 8px;
+            color: #287c8e;
+            font-weight: 900;
+            letter-spacing: 0;
+            text-transform: uppercase;
+          }
+          .gw-live-card pre {
+            margin: 0;
+            color: #163a41;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: inherit;
+            line-height: 1.48;
+          }
+          .gw-session-card {
+            min-height: 130px;
+            padding: 16px;
+            border: 1px solid #d8ded9;
+            border-radius: 8px;
+            background: #ffffff;
+          }
+          @media (max-width: 900px) {
+            .gw-flow,
+            .gw-kpi-grid {
+              grid-template-columns: 1fr;
+            }
+            .gw-flow-line {
+              display: none;
+            }
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def get_settings():
@@ -171,6 +366,83 @@ def context_text(limit=8):
     return "\n\n".join(lines)
 
 
+def live_compose_signature(mode):
+    if not st.session_state.segments:
+        return ""
+
+    recent = st.session_state.segments[-3:]
+    parts = [mode]
+    for item in recent:
+        parts.append(f"{item['time']}|{item['english']}|{item['korean']}")
+    return "\n".join(parts)
+
+
+def live_compose(settings, mode):
+    if not st.session_state.segments:
+        return "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다."
+
+    transcript = "\n".join(
+        f"{idx + 1}. EN: {item['english']}\n   KO: {item['korean']}"
+        for idx, item in enumerate(st.session_state.segments[-10:])
+    )
+    instructions = (
+        "You are Gwittim, a discreet live response coach for a Korean speaker in an English conversation. "
+        "Read the recent English/Korean transcript and suggest useful spoken English responses the user can say now. "
+        "Do not invent facts, commitments, numbers, or decisions. "
+        "If the next response is unclear, suggest a natural clarification question. "
+        "Return Korean section labels with English response lines. "
+        "Keep the output compact and immediately speakable."
+    )
+    input_text = "\n\n".join(
+        [
+            f"Response mode: {mode}",
+            f"Recent live conversation:\n{transcript}",
+            "\n".join(
+                [
+                    "Return this structure:",
+                    "지금 말할 수 있는 표현",
+                    "1. <short English sentence>",
+                    "2. <slightly warmer English sentence>",
+                    "확인 질문: <English clarification question>",
+                ]
+            ),
+        ]
+    )
+    return call_gemini(settings, instructions, input_text, max_output_tokens=460)
+
+
+def maybe_refresh_live_compose(settings, mode):
+    if not st.session_state.get("auto_compose", True):
+        st.session_state.live_reply_signature = ""
+        return "꺼짐"
+
+    signature = live_compose_signature(mode)
+    if not signature:
+        st.session_state.live_reply_suggestion = (
+            "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다."
+        )
+        st.session_state.live_reply_signature = ""
+        return "대기"
+
+    if signature == st.session_state.live_reply_signature:
+        return "갱신됨"
+
+    if not settings["api_key"]:
+        st.session_state.live_reply_suggestion = "Gemini API key를 연결하면 실시간 귀띔이 켜집니다."
+        st.session_state.live_reply_signature = ""
+        return "API key 필요"
+
+    with st.spinner("실시간 귀띔 갱신 중..."):
+        try:
+            st.session_state.live_reply_suggestion = live_compose(settings, mode)
+            st.session_state.live_reply_signature = signature
+            return "갱신됨"
+        except Exception as exc:
+            st.session_state.live_reply_suggestion = f"오류: {exc}"
+            st.session_state.live_reply_signature = signature
+            return "오류"
+
+
 def translate(settings, english_text):
     instructions = (
         "You are Gwittim, a quiet realtime English-to-Korean conversation assistant. "
@@ -233,16 +505,100 @@ def add_segment(english, korean):
     st.session_state.last_translation = korean
 
 
+def render_brand_mark():
+    st.markdown(
+        """
+        <div class="gw-brand">
+          <div class="gw-brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div>
+            <small>Gwittim</small>
+            <strong>조용히 듣고, 필요한 순간만 귀띔합니다.</strong>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_flow_graph(active_stage="compose"):
+    steps = [
+        ("listen", "01", "Listen"),
+        ("translate", "02", "Translate"),
+        ("compose", "03", "Compose"),
+    ]
+    step_html = []
+    for stage, index, label in steps:
+        active = " is-active" if stage == active_stage else ""
+        step_html.append(
+            f"""
+            <div class="gw-flow-step{active}">
+              <span>{index}</span>
+              <strong>{label}</strong>
+            </div>
+            """
+        )
+    st.markdown(
+        f"""
+        <div class="gw-flow" aria-label="Gwittim flow">
+          {step_html[0]}
+          <div class="gw-flow-line" aria-hidden="true"></div>
+          {step_html[1]}
+          <div class="gw-flow-line" aria-hidden="true"></div>
+          {step_html[2]}
+          <div class="gw-meter" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_session_metrics(cue_status):
+    st.markdown(
+        f"""
+        <div class="gw-kpi-grid">
+          <div class="gw-kpi">
+            <span>문장</span>
+            <strong>{len(st.session_state.segments)}</strong>
+          </div>
+          <div class="gw-kpi">
+            <span>최근 귀띔</span>
+            <strong>{escape(cue_status)}</strong>
+          </div>
+          <div class="gw-kpi">
+            <span>출력</span>
+            <strong>Text</strong>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_live_cue(cue_status):
+    suggestion = escape(st.session_state.live_reply_suggestion)
+    st.markdown(
+        f"""
+        <div class="gw-live-card">
+          <small>Live Cue · {escape(cue_status)}</small>
+          <pre>{suggestion}</pre>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_header(settings):
     left, right = st.columns([0.74, 0.26], vertical_alignment="center")
     with left:
-        st.caption("Gwittim")
+        render_brand_mark()
         if settings["active_session"] == "통역 세션":
-            st.title("조용히 듣고, 필요한 순간만 귀띔합니다.")
             st.write("실시간 영어 대화를 한국어 문장 번역으로 따라가는 통역 세션입니다.")
             st.info("Streamlit에서는 실행 입구를 제공하고, 실제 마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
         else:
-            st.title("조용히 읽고, 필요한 순간만 귀띔합니다.")
             st.write("영어 문장을 한국어로 번역하고, 필요한 답변을 영어로 다듬는 텍스트 세션입니다.")
             st.info("현재 모드: 텍스트 번역 전용. 통역 목소리는 출력하지 않습니다.")
     with right:
@@ -262,8 +618,8 @@ def render_live_panel(settings):
     st.markdown(
         f"""
         <div style="border:1px solid #d8ded9;border-radius:8px;background:#ffffff;padding:28px 30px;margin-bottom:12px;">
-          <div style="font-size:2.1rem;font-weight:850;line-height:1.25;color:#17211c;word-break:break-word;">{st.session_state.last_translation}</div>
-          <div style="margin-top:14px;color:#647067;line-height:1.5;word-break:break-word;">{st.session_state.last_english}</div>
+          <div style="font-size:2.1rem;font-weight:850;line-height:1.25;color:#17211c;word-break:break-word;">{escape(st.session_state.last_translation)}</div>
+          <div style="margin-top:14px;color:#647067;line-height:1.5;word-break:break-word;">{escape(st.session_state.last_english)}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -326,6 +682,11 @@ def render_assistant_panel(settings):
             "question": "질문",
         }.get,
     )
+    live_enabled = st.toggle("실시간 귀띔", key="auto_compose")
+    cue_status = maybe_refresh_live_compose(settings, mode) if live_enabled else "꺼짐"
+    render_session_metrics(cue_status)
+    render_live_cue(cue_status)
+
     korean_draft = st.text_area(
         "한국어 초안",
         placeholder="예: 그 일정은 괜찮지만, 위험 요소를 먼저 확인하고 싶습니다.",
@@ -350,12 +711,18 @@ def render_assistant_panel(settings):
         st.session_state.summary = "대화가 쌓이면 요약이 갱신됩니다."
         st.session_state.last_translation = "영어 문장을 입력하면 한국어 문장 번역으로 표시됩니다."
         st.session_state.last_english = "원문 영어는 여기에 함께 표시됩니다."
+        st.session_state.live_reply_suggestion = (
+            "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다."
+        )
+        st.session_state.live_reply_signature = ""
         st.session_state.reply_suggestion = "추천 영어 답변이 여기에 표시됩니다."
         st.rerun()
 
 
 def render_text_session(settings):
     st.caption("텍스트 세션은 Streamlit 안에서 바로 번역합니다. 음성 출력은 비활성화되어 있습니다.")
+    active_stage = "compose" if st.session_state.segments else "translate"
+    render_flow_graph(active_stage)
     main_col, side_col = st.columns([0.64, 0.36], gap="large")
     with main_col:
         render_live_panel(settings)
@@ -368,41 +735,46 @@ def render_interpretation_session(settings):
     st.write(
         "실시간 마이크 통역은 작은 Node 서버가 필요합니다. 아래 둘 중 하나로 열 수 있습니다."
     )
+    render_flow_graph("listen")
+    render_session_metrics("자동 대기")
 
     local_col, github_col = st.columns(2, gap="large")
 
     with local_col:
-        st.markdown("#### 내 Mac에서 열기")
-        st.code(
-            "\n".join(
-                [
-                    "cd /Users/leeyoung-nam/Documents/Translater",
-                    "npm run doctor",
-                    "npm start",
-                ]
-            ),
-            language="bash",
-        )
-        st.link_button("로컬 통역 세션 열기", LOCAL_REALTIME_URL, use_container_width=True)
-        st.caption("이미 서버가 켜져 있으면 바로 열립니다. 꺼져 있으면 위 명령을 먼저 실행하세요.")
+        with st.container(border=True):
+            st.markdown("#### 내 Mac에서 열기")
+            st.code(
+                "\n".join(
+                    [
+                        "cd /Users/leeyoung-nam/Documents/Translater",
+                        "npm run doctor",
+                        "npm start",
+                    ]
+                ),
+                language="bash",
+            )
+            st.link_button("로컬 통역 세션 열기", LOCAL_REALTIME_URL, use_container_width=True)
+            st.caption("이미 서버가 켜져 있으면 바로 열립니다. 꺼져 있으면 위 명령을 먼저 실행하세요.")
 
     with github_col:
-        st.markdown("#### GitHub Codespaces에서 열기")
-        st.write("GitHub 저장소에서 임시 클라우드 개발환경을 만들고, 3000번 포트를 열어 통역 세션에 들어갑니다.")
-        st.link_button("Codespaces 안내 보기", GITHUB_CODESPACES_GUIDE_URL, use_container_width=True)
-        st.link_button("GitHub 저장소 열기", GITHUB_REPO_URL, use_container_width=True)
-        st.caption("Codespaces에는 `GEMINI_API_KEY`를 Codespaces Secret으로 넣어야 합니다.")
+        with st.container(border=True):
+            st.markdown("#### GitHub Codespaces에서 열기")
+            st.write("GitHub 저장소에서 임시 클라우드 개발환경을 만들고, 3000번 포트를 열어 통역 세션에 들어갑니다.")
+            st.link_button("Codespaces 안내 보기", GITHUB_CODESPACES_GUIDE_URL, use_container_width=True)
+            st.link_button("GitHub 저장소 열기", GITHUB_REPO_URL, use_container_width=True)
+            st.caption("Codespaces에는 `GEMINI_API_KEY`를 Codespaces Secret으로 넣어야 합니다.")
 
     st.divider()
     st.markdown("#### 통역 세션 흐름")
     st.write("1. 통역 앱 열기")
     st.write("2. `통역 시작` 클릭")
     st.write("3. 마이크 권한 허용")
-    st.write("4. 영어로 말하면 한국어 문장 번역 표시")
+    st.write("4. 영어로 말하면 한국어 문장 번역과 답변 귀띔이 텍스트로 표시")
 
 
 def main():
     init_state()
+    inject_global_styles()
     settings = get_settings()
     render_header(settings)
 
