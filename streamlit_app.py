@@ -6,6 +6,7 @@ import streamlit as st
 
 
 APP_TITLE = "Gwittim"
+APP_MODE = "텍스트 번역 전용"
 DEFAULT_MODEL = "gemini-3.6-flash"
 
 
@@ -21,7 +22,7 @@ def init_state():
     defaults = {
         "segments": [],
         "summary": "대화가 쌓이면 요약이 갱신됩니다.",
-        "last_translation": "영어 문장을 입력하면 한국어 자막처럼 표시됩니다.",
+        "last_translation": "영어 문장을 입력하면 한국어 문장 번역으로 표시됩니다.",
         "last_english": "원문 영어는 여기에 함께 표시됩니다.",
         "reply_suggestion": "추천 영어 답변이 여기에 표시됩니다.",
     }
@@ -49,6 +50,8 @@ def get_settings():
 
     with st.sidebar:
         st.markdown("### Session")
+        st.success("텍스트 번역 전용")
+        st.caption("통역 목소리 출력은 꺼져 있습니다.")
         st.caption("Streamlit Cloud에서는 Settings > Secrets에 Gemini API 키를 넣으면 됩니다.")
         entered_key = st.text_input(
             "Gemini API key",
@@ -60,7 +63,8 @@ def get_settings():
         selected_model = st.text_input("Model", value=model)
         selected_target = st.text_input("Translation target", value=translation_target)
         save_audio = st.toggle("Store raw audio", value=False, disabled=True)
-        st.caption("현재 Streamlit 데모는 원본 오디오를 저장하지 않습니다.")
+        voice_output = st.toggle("Voice output", value=False, disabled=True)
+        st.caption("현재 배포 앱은 오디오를 저장하지 않고, 통역 음성도 출력하지 않습니다.")
 
     return {
         "api_key": entered_key or configured_key,
@@ -68,6 +72,7 @@ def get_settings():
         "model": normalize_model_name(selected_model) or DEFAULT_MODEL,
         "translation_target": selected_target.strip() or "ko",
         "save_audio": save_audio,
+        "voice_output": voice_output,
     }
 
 
@@ -182,18 +187,20 @@ def render_header(settings):
     left, right = st.columns([0.74, 0.26], vertical_alignment="center")
     with left:
         st.caption("Gwittim")
-        st.title("조용히 듣고, 필요한 순간만 귀띔합니다.")
-        st.write("영어 대화를 한국어로 따라가고, 필요한 답변을 영어로 다듬는 배포용 미리보기입니다.")
+        st.title("조용히 읽고, 필요한 순간만 귀띔합니다.")
+        st.write("영어 문장을 한국어로 번역하고, 필요한 답변을 영어로 다듬는 텍스트 전용 배포 앱입니다.")
+        st.info("현재 모드: 텍스트 번역 전용. 통역 목소리는 출력하지 않습니다.")
     with right:
         if settings["api_key"]:
             st.success("Gemini ready")
         else:
             st.error("API key required")
         st.caption(f"Model: {settings['model']}")
+        st.caption(APP_MODE)
 
 
 def render_live_panel(settings):
-    st.subheader("한국어 자막")
+    st.subheader("한국어 문장 번역")
     st.markdown(
         f"""
         <div style="border:1px solid #d8ded9;border-radius:8px;background:#ffffff;padding:28px 30px;margin-bottom:12px;">
@@ -206,11 +213,11 @@ def render_live_panel(settings):
 
     with st.form("translate_form", clear_on_submit=True):
         english_text = st.text_area(
-            "영어 발화 입력",
+            "영어 문장 입력",
             placeholder="예: Could you walk me through the next milestone?",
             height=110,
         )
-        submitted = st.form_submit_button("한국어로 귀띔", type="primary")
+        submitted = st.form_submit_button("한국어 문장으로 번역", type="primary")
 
     if submitted:
         if not english_text.strip():
@@ -283,7 +290,7 @@ def render_assistant_panel(settings):
     if st.button("세션 지우기", use_container_width=True):
         st.session_state.segments = []
         st.session_state.summary = "대화가 쌓이면 요약이 갱신됩니다."
-        st.session_state.last_translation = "영어 문장을 입력하면 한국어 자막처럼 표시됩니다."
+        st.session_state.last_translation = "영어 문장을 입력하면 한국어 문장 번역으로 표시됩니다."
         st.session_state.last_english = "원문 영어는 여기에 함께 표시됩니다."
         st.session_state.reply_suggestion = "추천 영어 답변이 여기에 표시됩니다."
         st.rerun()
@@ -294,9 +301,7 @@ def main():
     settings = get_settings()
     render_header(settings)
 
-    st.warning(
-        "Streamlit 배포용 화면은 텍스트 입력 기반 미리보기입니다. 실제 실시간 마이크 통역은 로컬 Node 웹앱에서 지원합니다."
-    )
+    st.caption("Streamlit 배포 화면은 텍스트 입력 기반으로 동작합니다. 음성 출력은 비활성화되어 있습니다.")
 
     main_col, side_col = st.columns([0.64, 0.36], gap="large")
     with main_col:
