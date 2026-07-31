@@ -102,6 +102,7 @@ Text-session writing criteria:
 - Avoid jargon-heavy phrasing, unnecessary acronyms, inflated claims, and long noun stacks.
 - Avoid hyphens or dashes as sentence punctuation or stylistic compound modifiers, except where a hyphen is part of an established scientific identifier.
 - Use careful scientific hedging and avoid unsupported novelty, mechanistic, regulatory, clinical, or efficacy claims.
+- Provide a current-session vocabulary review so users can reconsider meaning, nuance, register, and possible alternatives for key terms.
 - Preserve technical terms, gene/protein nomenclature, dates, numbers, SI units, and drug names.
 - Use International Nonproprietary Names for drugs when possible.
 - Emphasize scientific meaning, translational relevance, and development implications only when supported by the source text.

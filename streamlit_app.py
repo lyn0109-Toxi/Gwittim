@@ -16,6 +16,7 @@ APP_TITLE = "Gwittim"
 APP_MODE = "Nature Reviews Drug Discovery 수준 영작"
 DEFAULT_WRITING_RESULT = "한글 문장을 입력하면 Nature Reviews Drug Discovery 수준의 과학 영어 문장으로 표시됩니다."
 DEFAULT_WRITING_SOURCE = "영작 원문은 기록하지 않습니다."
+DEFAULT_VOCABULARY_REVIEW = "영작을 실행하면 핵심 어휘의 의미와 뉘앙스를 다시 확인할 수 있습니다."
 DEFAULT_PAPER_ANALYSIS = "논문 텍스트나 PDF를 추가하면 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론이 여기에 표시됩니다."
 DEFAULT_MODEL = "gemini-3.6-flash"
 PAPER_INPUT_LIMIT = 90000
@@ -85,6 +86,7 @@ def init_state():
         "summary": "대화 기록이 쌓이면 핵심 표현이 요약됩니다.",
         "last_translation": DEFAULT_WRITING_RESULT,
         "last_english": DEFAULT_WRITING_SOURCE,
+        "last_vocabulary_review": DEFAULT_VOCABULARY_REVIEW,
         "live_reply_suggestion": "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다.",
         "live_reply_signature": "",
         "reply_suggestion": "추천 영어 답변이 여기에 표시됩니다.",
@@ -908,6 +910,49 @@ def translate(settings, korean_text):
     return remove_sentence_dashes(english)
 
 
+def review_vocabulary(settings, korean_text, english_text):
+    instructions = (
+        "You are Gwittim, a scientific vocabulary coach for Korean researchers writing drug discovery and development manuscripts. "
+        "Review the polished English sentence and help the user reconsider the meaning of important vocabulary choices. "
+        "Focus on semantic precision, nuance, register, and whether the word is appropriate for Nature Reviews Drug Discovery-level scientific writing. "
+        "Choose 4 to 6 important words or phrases from the English result, prioritizing verbs, hedging words, development terms, endpoints, and terms that could be mistranslated from Korean. "
+        "Do not invent scientific facts or suggest claims not supported by the Korean source. "
+        "Do not use hyphens, en dashes, em dashes, or bullet markers. Use numbered items only. "
+        "Preserve established scientific identifiers if present. "
+        "Return Korean text only, using this exact structure: "
+        "## 어휘 점검 "
+        "1. <English term>: 의미 <Korean meaning>. 선택 이유 <why it fits>. 다시 생각할 점 <nuance or caution>. 대체 가능 표현 <alternative if useful>. "
+        "## 전체 뉘앙스 "
+        "<one short Korean paragraph on whether the sentence is cautious, assertive, translational, mechanistic, or developmental>."
+    )
+    input_text = "\n\n".join(
+        [
+            f"Korean source:\n{korean_text}",
+            f"Polished English:\n{english_text}",
+        ]
+    )
+    review = call_gemini(settings, instructions, input_text, max_output_tokens=1600)
+    return clean_vocabulary_review(review)
+
+
+def clean_vocabulary_review(text):
+    cleaned = text.strip()
+    cleaned = re.sub(r"(?m)^\s*[-•]\s+", "", cleaned)
+    for source, target in WRITING_DASH_REPLACEMENTS.items():
+        cleaned = re.sub(re.escape(source), target, cleaned, flags=re.IGNORECASE)
+
+    previous = None
+    while previous != cleaned:
+        previous = cleaned
+        cleaned = re.sub(r"(?<=[a-z])[-‐‑‒](?=[a-z])", " ", cleaned)
+    cleaned = re.sub(r"[ \t]+[-‐‑‒–—][ \t]+", ", ", cleaned)
+    cleaned = re.sub(r"[ \t]*[–—][ \t]*", ", ", cleaned)
+    cleaned = re.sub(r"[ \t]+([,.;:])", r"\1", cleaned)
+    cleaned = re.sub(r",\s*,+", ", ", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    return cleaned.strip()
+
+
 def remove_sentence_dashes(text):
     cleaned = text.strip()
     for source, target in WRITING_DASH_REPLACEMENTS.items():
@@ -1152,12 +1197,23 @@ def render_live_panel(settings):
             with st.spinner("영작 중..."):
                 try:
                     english = translate(settings, korean_text.strip())
+                    try:
+                        vocabulary_review = review_vocabulary(
+                            settings,
+                            korean_text.strip(),
+                            english,
+                        )
+                    except Exception as vocab_exc:
+                        vocabulary_review = f"## 어휘 점검\n어휘 점검을 완료하지 못했습니다. 오류: {vocab_exc}"
                     show_current_writing_result(english)
+                    st.session_state.last_vocabulary_review = vocabulary_review
                     st.rerun()
                 except Exception as exc:
                     st.error(str(exc))
 
     st.info("영작 기록은 저장하지 않습니다. 입력한 원문은 이전 문맥으로 재사용하지 않고, 현재 결과만 화면에 표시됩니다.")
+    st.subheader("어휘 점검")
+    st.markdown(st.session_state.last_vocabulary_review)
 
 
 def render_no_record_panel():
@@ -1167,6 +1223,7 @@ def render_no_record_panel():
         <div class="gw-session-card">
           <strong>저널 제출 문장에 가까운 영작</strong>
           <p>전문가 독자를 대상으로 하되 인접 분야 연구자도 읽을 수 있게 명확성, 능동태, 간결성, 논리적 연결을 우선합니다.</p>
+          <p>영작 후 핵심 어휘의 의미, 뉘앙스, 대체 가능 표현을 함께 점검합니다.</p>
           <p>과장된 novelty, 임상적 의미, 규제 가능성, 기전 설명은 원문 근거가 없으면 추가하지 않습니다.</p>
           <p>gene/protein nomenclature, assay, endpoint, SI unit, INN drug name은 가능한 한 보존합니다.</p>
         </div>
@@ -1192,6 +1249,7 @@ def render_no_record_panel():
     if st.button("현재 영작 결과 지우기", use_container_width=True):
         st.session_state.last_translation = DEFAULT_WRITING_RESULT
         st.session_state.last_english = DEFAULT_WRITING_SOURCE
+        st.session_state.last_vocabulary_review = DEFAULT_VOCABULARY_REVIEW
         st.rerun()
 
 
@@ -1250,6 +1308,7 @@ def render_assistant_panel(settings):
         st.session_state.summary = "대화 기록이 쌓이면 핵심 표현이 요약됩니다."
         st.session_state.last_translation = DEFAULT_WRITING_RESULT
         st.session_state.last_english = DEFAULT_WRITING_SOURCE
+        st.session_state.last_vocabulary_review = DEFAULT_VOCABULARY_REVIEW
         st.session_state.live_reply_suggestion = (
             "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다."
         )
