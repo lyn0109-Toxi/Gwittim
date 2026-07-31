@@ -1,13 +1,20 @@
 import os
+from io import BytesIO
 from datetime import datetime
 from html import escape
 
 import requests
 import streamlit as st
 
+try:
+    from pypdf import PdfReader
+except Exception:
+    PdfReader = None
+
 
 APP_TITLE = "Gwittim"
 APP_MODE = "Nature Reviews Drug Discovery 톤 영작"
+DEFAULT_PAPER_ANALYSIS = "논문 텍스트나 PDF를 추가하면 Abs 요약, 섹터/섹션별 이슈, 결론이 여기에 표시됩니다."
 DEFAULT_MODEL = "gemini-3.6-flash"
 LOCAL_REALTIME_URL = "http://127.0.0.1:3000"
 GITHUB_REPO_URL = "https://github.com/lyn0109-Toxi/Gwittim"
@@ -33,6 +40,9 @@ def init_state():
         "live_reply_suggestion": "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다.",
         "live_reply_signature": "",
         "reply_suggestion": "추천 영어 답변이 여기에 표시됩니다.",
+        "paper_analysis": DEFAULT_PAPER_ANALYSIS,
+        "paper_source_name": "",
+        "paper_source_chars": 0,
         "auto_compose": True,
         "session_api_key": "",
         "active_session": "텍스트 세션",
@@ -314,10 +324,16 @@ def get_settings():
 
     with st.sidebar:
         st.markdown("### Session")
+        session_options = ["텍스트 세션", "번역 세션", "통역 세션"]
+        current_index = (
+            session_options.index(st.session_state.active_session)
+            if st.session_state.active_session in session_options
+            else 0
+        )
         active_session = st.radio(
             "들어갈 세션",
-            options=["텍스트 세션", "통역 세션"],
-            index=0 if st.session_state.active_session == "텍스트 세션" else 1,
+            options=session_options,
+            index=current_index,
             horizontal=True,
         )
         st.session_state.active_session = active_session
@@ -325,6 +341,9 @@ def get_settings():
         if active_session == "텍스트 세션":
             st.info("Nature Reviews Drug Discovery 톤 영작")
             st.caption("한글 원문을 과학 영어 문장으로 다듬습니다.")
+        elif active_session == "번역 세션":
+            st.info("논문 바로 정리")
+            st.caption("논문 텍스트나 PDF에서 Abs 요약, 섹터/섹션별 이슈, 결론을 정리합니다.")
         else:
             st.info("실시간 통역 세션")
             st.caption("마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
@@ -425,6 +444,60 @@ def context_text(limit=8):
     for item in recent:
         lines.append(f"EN: {item['english']}\nKO: {item['korean']}")
     return "\n\n".join(lines)
+
+
+def extract_pdf_text(uploaded_file):
+    if uploaded_file is None:
+        return ""
+
+    if PdfReader is None:
+        raise RuntimeError("PDF 처리를 위해 pypdf가 필요합니다. 배포 환경에서는 requirements.txt로 자동 설치됩니다.")
+
+    reader = PdfReader(BytesIO(uploaded_file.getvalue()))
+    pages = []
+    for page_index, page in enumerate(reader.pages[:80]):
+        text = page.extract_text() or ""
+        if text.strip():
+            pages.append(f"[Page {page_index + 1}]\n{text.strip()}")
+    return "\n\n".join(pages)
+
+
+def compact_paper_text(text, max_chars=70000):
+    normalized = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+    if len(normalized) <= max_chars:
+        return normalized
+
+    head = normalized[: int(max_chars * 0.72)]
+    tail = normalized[-int(max_chars * 0.28) :]
+    return "\n\n[중간 본문 일부 생략]\n\n".join([head, tail])
+
+
+def analyze_paper(settings, paper_text, source_name):
+    instructions = (
+        "You are Gwittim, a scientific paper translation and analysis assistant for Korean readers in drug discovery, toxicology, regulatory science, and pharmaceutical development. "
+        "Analyze the supplied paper text in Korean. "
+        "Do not invent facts, numbers, claims, limitations, methods, or conclusions that are not supported by the supplied text. "
+        "If the abstract, section headings, methods, results, or conclusion are missing, say that the information is not clearly available. "
+        "Prioritize the abstract, introduction, methods, results, discussion, conclusion, limitations, and any safety or translational-development implications. "
+        "Use concise Korean. Preserve key English terms, target names, modality names, drug names, assay names, endpoints, and numerical values. "
+        "Return only this structure: "
+        "## Abs 요약 "
+        "## 섹터/섹션별 이슈 "
+        "## 결론 "
+        "## 확인 질문."
+    )
+    input_text = "\n\n".join(
+        [
+            f"Source name: {source_name or 'pasted text'}",
+            "Required output format:",
+            "## Abs 요약\n- 연구 질문\n- 접근법\n- 핵심 결과\n- 의미",
+            "## 섹터/섹션별 이슈\n| 섹터/섹션 | 핵심 내용 | 이슈/한계 | 확인할 포인트 |",
+            "## 결론\n- 논문의 결론\n- 개발/규제/독성 관점의 시사점\n- 과도하게 해석하면 안 되는 부분",
+            "## 확인 질문\n- 추가로 읽어야 할 질문 3개",
+            f"Paper text:\n{compact_paper_text(paper_text)}",
+        ]
+    )
+    return call_gemini(settings, instructions, input_text, max_output_tokens=2400)
 
 
 def live_compose_signature(mode):
@@ -650,6 +723,12 @@ def render_flow_graph(active_stage="compose", flow="interpretation"):
             ("translate", "02", "Rewrite"),
             ("compose", "03", "Compose"),
         ]
+    elif flow == "paper":
+        steps = [
+            ("listen", "01", "Paper"),
+            ("translate", "02", "Abstract"),
+            ("compose", "03", "Conclusion"),
+        ]
     else:
         steps = [
             ("listen", "01", "Listen"),
@@ -701,6 +780,30 @@ def render_session_metrics(cue_status):
     )
 
 
+def render_paper_metrics(status):
+    source_name = st.session_state.paper_source_name or "대기"
+    source_chars = st.session_state.paper_source_chars
+    st.markdown(
+        f"""
+        <div class="gw-kpi-grid">
+          <div class="gw-kpi">
+            <span>논문</span>
+            <strong>{escape(source_name[:24])}</strong>
+          </div>
+          <div class="gw-kpi">
+            <span>추출 텍스트</span>
+            <strong>{source_chars:,}</strong>
+          </div>
+          <div class="gw-kpi">
+            <span>상태</span>
+            <strong>{escape(status)}</strong>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_live_cue(cue_status):
     suggestion = escape(st.session_state.live_reply_suggestion)
     st.markdown(
@@ -721,6 +824,9 @@ def render_header(settings):
         if settings["active_session"] == "통역 세션":
             st.write("실시간 영어 대화를 한국어 문장 번역으로 따라가는 통역 세션입니다.")
             st.info("Streamlit에서는 실행 입구를 제공하고, 실제 마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
+        elif settings["active_session"] == "번역 세션":
+            st.write("논문 텍스트나 PDF를 읽고 Abs 요약, 섹터/섹션별 이슈, 결론을 바로 정리하는 번역 세션입니다.")
+            st.info("현재 모드: 논문 정리. PDF는 텍스트 추출 후 분석합니다.")
         else:
             st.write("한글 원문을 Nature Reviews Drug Discovery 톤의 과학 영어로 다듬는 텍스트 세션입니다.")
             st.info("현재 모드: 한글→영문 영작. 통역 목소리는 출력하지 않습니다.")
@@ -730,7 +836,11 @@ def render_header(settings):
         else:
             st.error("API key required")
         st.caption(f"Model: {settings['model']}")
-        st.caption(settings["active_session"] if settings["active_session"] == "통역 세션" else APP_MODE)
+        st.caption(
+            settings["active_session"]
+            if settings["active_session"] in ["번역 세션", "통역 세션"]
+            else APP_MODE
+        )
 
     if settings["active_session"] == "텍스트 세션" and not settings["api_key"]:
         st.warning("왼쪽 사이드바에서 Gemini API key를 한 번 붙여넣고 `API key 한번에 적용`을 눌러주세요.")
@@ -853,6 +963,66 @@ def render_text_session(settings):
         render_assistant_panel(settings)
 
 
+def render_translation_session(settings):
+    st.caption("번역 세션은 논문 텍스트나 PDF에서 Abs 요약, 섹터/섹션별 이슈, 결론을 바로 정리합니다.")
+    active_stage = "compose" if st.session_state.paper_source_chars else "translate"
+    render_flow_graph(active_stage, flow="paper")
+    analysis_ready = bool(
+        st.session_state.paper_source_chars
+        and st.session_state.paper_analysis != DEFAULT_PAPER_ANALYSIS
+    )
+    render_paper_metrics("분석 완료" if analysis_ready else "대기")
+
+    input_col, result_col = st.columns([0.44, 0.56], gap="large")
+    with input_col:
+        st.subheader("논문 추가")
+        uploaded_pdf = st.file_uploader("PDF 업로드", type=["pdf"])
+        paper_text = st.text_area(
+            "논문 텍스트 붙여넣기",
+            placeholder="Abstract, Introduction, Results, Discussion, Conclusion 등을 붙여넣으세요.",
+            height=180,
+        )
+        analyze_clicked = st.button("논문 바로 정리", use_container_width=True)
+
+        if analyze_clicked:
+            if not settings["api_key"]:
+                st.warning("Gemini API key를 먼저 연결해주세요.")
+            else:
+                try:
+                    extracted_pdf_text = extract_pdf_text(uploaded_pdf)
+                    combined_text = "\n\n".join(
+                        part for part in [extracted_pdf_text, paper_text.strip()] if part
+                    )
+                    if not combined_text.strip():
+                        st.warning("PDF를 업로드하거나 논문 텍스트를 붙여넣어주세요.")
+                    else:
+                        source_name = uploaded_pdf.name if uploaded_pdf else "붙여넣은 논문 텍스트"
+                        with st.spinner("논문을 정리하는 중..."):
+                            analysis = analyze_paper(
+                                settings,
+                                combined_text,
+                                source_name,
+                            )
+                        if not analysis.strip():
+                            raise RuntimeError("논문 분석 결과를 받지 못했습니다. 입력 텍스트를 조금 더 길게 넣어 다시 시도해주세요.")
+                        st.session_state.paper_source_name = source_name
+                        st.session_state.paper_source_chars = len(combined_text)
+                        st.session_state.paper_analysis = analysis
+                        st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+        if st.button("논문 세션 지우기", use_container_width=True):
+            st.session_state.paper_analysis = DEFAULT_PAPER_ANALYSIS
+            st.session_state.paper_source_name = ""
+            st.session_state.paper_source_chars = 0
+            st.rerun()
+
+    with result_col:
+        st.subheader("논문 정리")
+        st.markdown(st.session_state.paper_analysis)
+
+
 def render_interpretation_session(settings):
     st.subheader("실시간 통역 세션 열기")
     st.write(
@@ -903,6 +1073,8 @@ def main():
 
     if settings["active_session"] == "통역 세션":
         render_interpretation_session(settings)
+    elif settings["active_session"] == "번역 세션":
+        render_translation_session(settings)
     else:
         render_text_session(settings)
 
