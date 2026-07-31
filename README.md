@@ -91,7 +91,7 @@ If Secrets are not configured yet, the deployed Streamlit app also lets you past
 The Streamlit version has three entry points:
 
 - `텍스트 세션`: rewrite Korean drafts into Nature Reviews Drug Discovery-level scientific English, without keeping a writing history in the app session.
-- `번역 세션`: paste paper text or upload a PDF, then review `Abs 요약`, `섹터/섹션별 이슈`, `결과 처리`, `결론`, and follow-up questions in Korean.
+- `번역 세션`: paste paper text or upload a PDF, then review `Abs 요약`, `섹터/섹션별 이슈`, `결과 처리`, `인사이트 발췌`, `재검증 체크`, `결론`, and follow-up questions in Korean.
 - `통역 세션`: open the realtime microphone interpreter through the local Node app or GitHub Codespaces, with text-only subtitles and live Compose cues.
 
 Text-session writing criteria:
@@ -103,6 +103,7 @@ Text-session writing criteria:
 - Avoid hyphens or dashes as sentence punctuation or stylistic compound modifiers, except where a hyphen is part of an established scientific identifier.
 - Use careful scientific hedging and avoid unsupported novelty, mechanistic, regulatory, clinical, or efficacy claims.
 - Provide a current-session vocabulary review so users can reconsider meaning, nuance, register, and possible alternatives for key terms.
+- Extract practical insights from reviewed wording and flag terms or claims that should be revalidated against the original data before use.
 - Preserve technical terms, gene/protein nomenclature, dates, numbers, SI units, and drug names.
 - Use International Nonproprietary Names for drugs when possible.
 - Emphasize scientific meaning, translational relevance, and development implications only when supported by the source text.

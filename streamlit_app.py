@@ -16,14 +16,16 @@ APP_TITLE = "Gwittim"
 APP_MODE = "Nature Reviews Drug Discovery 수준 영작"
 DEFAULT_WRITING_RESULT = "한글 문장을 입력하면 Nature Reviews Drug Discovery 수준의 과학 영어 문장으로 표시됩니다."
 DEFAULT_WRITING_SOURCE = "영작 원문은 기록하지 않습니다."
-DEFAULT_VOCABULARY_REVIEW = "영작을 실행하면 핵심 어휘의 의미와 뉘앙스를 다시 확인할 수 있습니다."
-DEFAULT_PAPER_ANALYSIS = "논문 텍스트나 PDF를 추가하면 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론이 여기에 표시됩니다."
+DEFAULT_VOCABULARY_REVIEW = "영작을 실행하면 핵심 어휘의 의미, 인사이트, 재검증 포인트를 다시 확인할 수 있습니다."
+DEFAULT_PAPER_ANALYSIS = "논문 텍스트나 PDF를 추가하면 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 인사이트 발췌, 재검증 체크, 결론이 여기에 표시됩니다."
 DEFAULT_MODEL = "gemini-3.6-flash"
 PAPER_INPUT_LIMIT = 90000
 PAPER_REQUIRED_HEADINGS = [
     "## Abs 요약",
     "## 섹터/섹션별 이슈",
     "## 결과 처리",
+    "## 인사이트 발췌",
+    "## 재검증 체크",
     "## 결론",
     "## 확인 질문",
 ]
@@ -425,7 +427,7 @@ def get_settings():
             st.caption("한글 원문을 저널 제출 수준의 과학 영어 문장으로 다듬고, 영작 기록은 저장하지 않습니다.")
         elif active_session == "번역 세션":
             st.info("논문 바로 정리")
-            st.caption("논문 텍스트나 PDF에서 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론을 정리합니다.")
+            st.caption("논문 텍스트나 PDF에서 Abs 요약, 이슈, 결과 처리, 인사이트, 재검증 체크를 정리합니다.")
         else:
             st.info("실시간 통역 세션")
             st.caption("마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
@@ -730,12 +732,18 @@ def analyze_paper(settings, paper_text, source_name, depth="상세"):
         "Prioritize abstract, introduction, methods, results, discussion, conclusion, limitations, figures/tables mentioned in text, and safety or translational-development implications. "
         "Preserve key English terms, target names, modality names, drug names, assay names, endpoints, biomarkers, species, cell lines, doses, concentrations, p values, confidence intervals, dates, and numerical values. "
         "For the Results section, explain how the evidence was processed or interpreted: models, assays, cohorts, endpoints, controls, comparators, statistical signals, and what remains uncertain. "
+        "Extract insights only from the inspected text. Separate direct observations from interpretation. "
+        "For each insight, cite the supporting section or exact source phrase in Korean summary form and assign confidence as 높음, 중간, or 낮음. "
+        "Add a revalidation checklist for claims, numbers, endpoints, figures, tables, statistical signals, translational implications, limitations, and any conclusion that could change after checking the original paper. "
+        "If a point cannot be verified from the supplied text, label it 근거 부족 rather than filling the gap. "
         "Use clear Korean, but keep essential scientific terms in English in parentheses when helpful. "
         f"{paper_depth_instruction(depth)} "
         "Return only this Markdown structure and use every heading: "
         "## Abs 요약 "
         "## 섹터/섹션별 이슈 "
         "## 결과 처리 "
+        "## 인사이트 발췌 "
+        "## 재검증 체크 "
         "## 결론 "
         "## 확인 질문."
     )
@@ -748,13 +756,15 @@ def analyze_paper(settings, paper_text, source_name, depth="상세"):
             "## Abs 요약\n- 연구 질문\n- 배경/미충족 수요\n- 접근법\n- 핵심 결과\n- 의미\n- 한계",
             "## 섹터/섹션별 이슈\n| 섹터/섹션 | 핵심 주장/결과 | 근거 | 이슈/한계 | 확인할 포인트 |",
             "## 결과 처리\n- 주요 결과가 어떤 실험/분석/비교로 도출됐는지\n- 통계/정량값/endpoint가 어떻게 해석되는지\n- 표/그림에서 확인해야 할 부분\n- 과잉 해석 위험",
+            "## 인사이트 발췌\n| 인사이트 | 원문 근거/섹션 | 왜 중요한가 | 신뢰도 |",
+            "## 재검증 체크\n| 재검증 항목 | 현재 근거 | 확인 방법 | 틀렸을 때 위험 |",
             "## 결론\n- 논문의 결론\n- 개발/규제/독성 관점의 시사점\n- 후속 연구 또는 검증 포인트\n- 과도하게 해석하면 안 되는 부분",
             "## 확인 질문\n- 추가로 읽어야 할 질문 5개",
             f"Detected section digest:\n{section_digest}",
             f"Full paper text excerpt:\n{compact_text}",
         ]
     )
-    raw_analysis = call_gemini(settings, instructions, input_text, max_output_tokens=5600)
+    raw_analysis = call_gemini(settings, instructions, input_text, max_output_tokens=7200)
     return normalize_paper_analysis_output(raw_analysis, len(normalized_text), section_count)
 
 
@@ -916,12 +926,18 @@ def review_vocabulary(settings, korean_text, english_text):
         "Review the polished English sentence and help the user reconsider the meaning of important vocabulary choices. "
         "Focus on semantic precision, nuance, register, and whether the word is appropriate for Nature Reviews Drug Discovery-level scientific writing. "
         "Choose 4 to 6 important words or phrases from the English result, prioritizing verbs, hedging words, development terms, endpoints, and terms that could be mistranslated from Korean. "
+        "After the vocabulary review, extract practical insights from the checked vocabulary, such as how the wording frames evidence strength, uncertainty, development relevance, or claim boundaries. "
+        "Then add a revalidation checklist that tells the user which terms or claims should be checked against the original data, methods, results, or target journal context before use. "
         "Do not invent scientific facts or suggest claims not supported by the Korean source. "
         "Do not use hyphens, en dashes, em dashes, or bullet markers. Use numbered items only. "
         "Preserve established scientific identifiers if present. "
         "Return Korean text only, using this exact structure: "
         "## 어휘 점검 "
         "1. <English term>: 의미 <Korean meaning>. 선택 이유 <why it fits>. 다시 생각할 점 <nuance or caution>. 대체 가능 표현 <alternative if useful>. "
+        "## 인사이트 발췌 "
+        "1. <insight from the reviewed vocabulary>. 근거 <source wording or English term>. 적용 의미 <why it matters>. "
+        "## 재검증 체크 "
+        "1. <term or claim to recheck>. 확인할 내용 <what to verify>. 확인 방법 <how to verify>. 위험 <risk if wrong>. "
         "## 전체 뉘앙스 "
         "<one short Korean paragraph on whether the sentence is cautious, assertive, translational, mechanistic, or developmental>."
     )
@@ -1149,7 +1165,7 @@ def render_header(settings):
             st.write("실시간 영어 대화를 한국어 문장 번역으로 따라가는 통역 세션입니다.")
             st.info("Streamlit에서는 실행 입구를 제공하고, 실제 마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
         elif settings["active_session"] == "번역 세션":
-            st.write("논문 텍스트나 PDF를 읽고 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론을 바로 정리하는 번역 세션입니다.")
+            st.write("논문 텍스트나 PDF를 읽고 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 인사이트 발췌, 재검증 체크를 바로 정리하는 번역 세션입니다.")
             st.info("현재 모드: 논문 정리. PDF는 텍스트 추출 후 분석합니다.")
         else:
             st.write("한글 원문을 Nature Reviews Drug Discovery 수준의 과학 영어로 다듬는 텍스트 세션입니다.")
@@ -1212,7 +1228,7 @@ def render_live_panel(settings):
                     st.error(str(exc))
 
     st.info("영작 기록은 저장하지 않습니다. 입력한 원문은 이전 문맥으로 재사용하지 않고, 현재 결과만 화면에 표시됩니다.")
-    st.subheader("어휘 점검")
+    st.subheader("어휘 점검 및 재검증")
     st.markdown(st.session_state.last_vocabulary_review)
 
 
@@ -1223,7 +1239,7 @@ def render_no_record_panel():
         <div class="gw-session-card">
           <strong>저널 제출 문장에 가까운 영작</strong>
           <p>전문가 독자를 대상으로 하되 인접 분야 연구자도 읽을 수 있게 명확성, 능동태, 간결성, 논리적 연결을 우선합니다.</p>
-          <p>영작 후 핵심 어휘의 의미, 뉘앙스, 대체 가능 표현을 함께 점검합니다.</p>
+          <p>영작 후 핵심 어휘의 의미, 뉘앙스, 대체 가능 표현, 인사이트, 재검증 포인트를 함께 점검합니다.</p>
           <p>과장된 novelty, 임상적 의미, 규제 가능성, 기전 설명은 원문 근거가 없으면 추가하지 않습니다.</p>
           <p>gene/protein nomenclature, assay, endpoint, SI unit, INN drug name은 가능한 한 보존합니다.</p>
         </div>
@@ -1329,7 +1345,7 @@ def render_text_session(settings):
 
 
 def render_translation_session(settings):
-    st.caption("번역 세션은 논문 텍스트나 PDF에서 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론을 바로 정리합니다.")
+    st.caption("번역 세션은 논문 텍스트나 PDF에서 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 인사이트 발췌, 재검증 체크, 결론을 바로 정리합니다.")
     active_stage = "compose" if st.session_state.paper_source_chars else "translate"
     render_flow_graph(active_stage, flow="paper")
     analysis_ready = bool(
