@@ -7,7 +7,7 @@ import streamlit as st
 
 
 APP_TITLE = "Gwittim"
-APP_MODE = "텍스트 번역 전용"
+APP_MODE = "Nature Reviews Drug Discovery 톤 영작"
 DEFAULT_MODEL = "gemini-3.6-flash"
 LOCAL_REALTIME_URL = "http://127.0.0.1:3000"
 GITHUB_REPO_URL = "https://github.com/lyn0109-Toxi/Gwittim"
@@ -27,9 +27,9 @@ st.set_page_config(
 def init_state():
     defaults = {
         "segments": [],
-        "summary": "대화가 쌓이면 요약이 갱신됩니다.",
-        "last_translation": "영어 문장을 입력하면 한국어 문장 번역으로 표시됩니다.",
-        "last_english": "원문 영어는 여기에 함께 표시됩니다.",
+        "summary": "영작 기록이 쌓이면 핵심 표현이 요약됩니다.",
+        "last_translation": "한글 문장을 입력하면 Nature Reviews Drug Discovery 톤의 영어 문장으로 표시됩니다.",
+        "last_english": "원문 한국어는 여기에 함께 표시됩니다.",
         "live_reply_suggestion": "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다.",
         "live_reply_signature": "",
         "reply_suggestion": "추천 영어 답변이 여기에 표시됩니다.",
@@ -323,8 +323,8 @@ def get_settings():
         st.session_state.active_session = active_session
 
         if active_session == "텍스트 세션":
-            st.info("텍스트 번역 전용")
-            st.caption("통역 목소리 출력은 꺼져 있습니다.")
+            st.info("Nature Reviews Drug Discovery 톤 영작")
+            st.caption("한글 원문을 과학 영어 문장으로 다듬습니다.")
         else:
             st.info("실시간 통역 세션")
             st.caption("마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
@@ -456,6 +456,8 @@ def live_compose(settings, mode):
         "1. <short English sentence> 2. <warmer English sentence> "
         "확인 질문: <English clarification question>. "
         "Keep every English sentence compact and immediately speakable. "
+        "Prefer natural phrasal verbs for live spoken cues when they fit, especially follow up, look into, walk through, bring up, point out, move forward, rule out, narrow down, set up, carry out, and circle back. "
+        "Do not force a phrasal verb if it would make the sentence vague or too casual. "
         "Do not use contractions or apostrophes."
     )
     input_text = "\n\n".join(
@@ -485,14 +487,14 @@ def normalize_live_compose_suggestion(suggestion, mode):
     templates = {
         "agree": [
             "지금 말할 수 있는 표현:",
-            "1. I agree that we should check the risks first.",
-            "2. That makes sense, and I would like to review the potential risks before we move forward.",
+            "1. I agree that we should look into the risks first.",
+            "2. That makes sense, and I would like to walk through the potential risks before we move forward.",
             "확인 질문: Could you clarify the main risk we should focus on?",
         ],
         "disagree": [
             "지금 말할 수 있는 표현:",
-            "1. I see your point, but I would like to check the risks first.",
-            "2. I understand the plan, but I think we should review the potential risks before we decide.",
+            "1. I see your point, but I would like to look into the risks first.",
+            "2. I understand the plan, but I think we should walk through the potential risks before we decide.",
             "확인 질문: Could you explain why this timing feels safe to commit to?",
         ],
         "question": [
@@ -503,8 +505,8 @@ def normalize_live_compose_suggestion(suggestion, mode):
         ],
         "neutral": [
             "지금 말할 수 있는 표현:",
-            "1. I understand. I would like to check the risks first.",
-            "2. That makes sense, and I would like to review the potential risks before we move forward.",
+            "1. I understand. I would like to look into the risks first.",
+            "2. That makes sense, and I would like to walk through the potential risks before we move forward.",
             "확인 질문: Could you clarify the main risk we should focus on?",
         ],
     }
@@ -552,22 +554,28 @@ def maybe_refresh_live_compose(settings, mode):
             return "오류"
 
 
-def translate(settings, english_text):
+def translate(settings, korean_text):
     instructions = (
-        "You are Gwittim, a quiet realtime English-to-Korean conversation assistant. "
-        "Translate live English speech into natural Korean subtitles. Return only Korean text. "
-        "Keep names, product names, technical terms, dates, and numbers precise. "
-        "If the sentence is fragmentary, translate the intended meaning briefly without adding facts."
+        "You are Gwittim, a scientific Korean-to-English writing assistant for drug discovery and development. "
+        "Rewrite the Korean draft into polished English inspired by Nature Reviews Drug Discovery and Nature Portfolio writing guidance. "
+        "Prioritize clarity, active voice, concise sentence structure, and logical flow. "
+        "Make the writing accessible to readers in adjacent scientific disciplines without oversimplifying the science. "
+        "Avoid jargon-heavy phrasing, unnecessary acronyms, inflated claims, and long noun stacks. "
+        "Preserve technical terms, gene/protein nomenclature, drug names, dates, numbers, and SI units exactly unless the Korean clearly asks for revision. "
+        "Use International Nonproprietary Names for drugs when the input provides or implies them. "
+        "Emphasize implications and scientific meaning rather than merely describing facts. "
+        "Do not add unsupported data, citations, results, mechanisms, or regulatory claims. "
+        "Return only the polished English text."
     )
     input_text = "\n\n".join(
         part
         for part in [
-            f"Recent context:\n{context_text()}" if st.session_state.segments else "",
-            f"Current English utterance:\n{english_text}",
+            f"Recent writing context:\n{context_text()}" if st.session_state.segments else "",
+            f"Current Korean draft:\n{korean_text}",
         ]
         if part
     )
-    return call_gemini(settings, instructions, input_text, max_output_tokens=220)
+    return call_gemini(settings, instructions, input_text, max_output_tokens=720)
 
 
 def summarize(settings):
@@ -576,9 +584,9 @@ def summarize(settings):
         for idx, item in enumerate(st.session_state.segments[-24:])
     )
     instructions = (
-        "You are Gwittim, a realtime meeting brief assistant. Summarize the current "
-        "conversation in Korean for a user who is listening live. Keep it short, "
-        "concrete, and useful. Use compact bullets. Include decisions and action items only if present."
+        "You are Gwittim, a scientific writing brief assistant. Summarize the current "
+        "Korean-to-English writing history in Korean. Keep it short, concrete, and useful. "
+        "Use compact bullets. Highlight recurring terminology, phrasing choices, and possible style risks only if present."
     )
     return call_gemini(settings, instructions, transcript, max_output_tokens=380)
 
@@ -590,6 +598,8 @@ def compose_reply(settings, korean_draft, mode):
         "Return exactly two complete English sentences. "
         "Use this exact plain-text format with no Markdown: "
         "1. <short direct sentence> 2. <slightly warmer professional sentence>. "
+        "Prefer a natural phrasal verb when it is precise and appropriate, such as follow up, look into, walk through, bring up, point out, move forward, rule out, narrow down, set up, carry out, or circle back. "
+        "Do not force phrasal verbs if they would sound informal or reduce scientific precision. "
         "Do not add unsupported facts."
     )
     input_text = "\n\n".join(
@@ -604,7 +614,7 @@ def compose_reply(settings, korean_draft, mode):
     return call_gemini(settings, instructions, input_text, max_output_tokens=720)
 
 
-def add_segment(english, korean):
+def add_segment(korean, english):
     st.session_state.segments.append(
         {
             "time": datetime.now().strftime("%H:%M:%S"),
@@ -612,8 +622,8 @@ def add_segment(english, korean):
             "korean": korean,
         }
     )
-    st.session_state.last_english = english
-    st.session_state.last_translation = korean
+    st.session_state.last_english = korean
+    st.session_state.last_translation = english
 
 
 def render_brand_mark():
@@ -633,12 +643,19 @@ def render_brand_mark():
     )
 
 
-def render_flow_graph(active_stage="compose"):
-    steps = [
-        ("listen", "01", "Listen"),
-        ("translate", "02", "Translate"),
-        ("compose", "03", "Compose"),
-    ]
+def render_flow_graph(active_stage="compose", flow="interpretation"):
+    if flow == "writing":
+        steps = [
+            ("listen", "01", "Korean"),
+            ("translate", "02", "Rewrite"),
+            ("compose", "03", "Compose"),
+        ]
+    else:
+        steps = [
+            ("listen", "01", "Listen"),
+            ("translate", "02", "Translate"),
+            ("compose", "03", "Compose"),
+        ]
     step_html = []
     for stage, index, label in steps:
         active = " is-active" if stage == active_stage else ""
@@ -705,8 +722,8 @@ def render_header(settings):
             st.write("실시간 영어 대화를 한국어 문장 번역으로 따라가는 통역 세션입니다.")
             st.info("Streamlit에서는 실행 입구를 제공하고, 실제 마이크 통역은 로컬 또는 Codespaces 앱에서 엽니다.")
         else:
-            st.write("영어 문장을 한국어로 번역하고, 필요한 답변을 영어로 다듬는 텍스트 세션입니다.")
-            st.info("현재 모드: 텍스트 번역 전용. 통역 목소리는 출력하지 않습니다.")
+            st.write("한글 원문을 Nature Reviews Drug Discovery 톤의 과학 영어로 다듬는 텍스트 세션입니다.")
+            st.info("현재 모드: 한글→영문 영작. 통역 목소리는 출력하지 않습니다.")
     with right:
         if settings["api_key"]:
             st.info("Gemini ready")
@@ -720,7 +737,7 @@ def render_header(settings):
 
 
 def render_live_panel(settings):
-    st.subheader("한국어 문장 번역")
+    st.subheader("Nature Reviews Drug Discovery 톤 영작")
     st.markdown(
         f"""
         <div class="gw-subtitle-card">
@@ -732,21 +749,21 @@ def render_live_panel(settings):
     )
 
     with st.form("translate_form", clear_on_submit=True):
-        english_text = st.text_area(
-            "영어 문장 입력",
-            placeholder="예: Could you walk me through the next milestone?",
+        korean_text = st.text_area(
+            "한글 원문 입력",
+            placeholder="예: 이 후보물질은 전임상 단계에서 선택성과 안전성 측면에서 개선 가능성을 보였다.",
             height=110,
         )
-        submitted = st.form_submit_button("한국어 문장으로 번역", type="primary")
+        submitted = st.form_submit_button("Nature 톤 영어로 영작", type="primary")
 
     if submitted:
-        if not english_text.strip():
-            st.warning("영어 문장을 먼저 입력해주세요.")
+        if not korean_text.strip():
+            st.warning("한글 원문을 먼저 입력해주세요.")
         else:
-            with st.spinner("번역 중..."):
+            with st.spinner("영작 중..."):
                 try:
-                    korean = translate(settings, english_text.strip())
-                    add_segment(english_text.strip(), korean)
+                    english = translate(settings, korean_text.strip())
+                    add_segment(korean_text.strip(), english)
                     if len(st.session_state.segments) >= 3:
                         st.session_state.summary = summarize(settings)
                     st.rerun()
@@ -754,12 +771,12 @@ def render_live_panel(settings):
                     st.error(str(exc))
 
     if st.session_state.segments:
-        st.markdown("#### Transcript")
+        st.markdown("#### Writing History")
         for item in reversed(st.session_state.segments[-12:]):
             with st.container(border=True):
                 st.caption(item["time"])
-                st.write(f"**{item['korean']}**")
-                st.caption(item["english"])
+                st.write(f"**{item['english']}**")
+                st.caption(item["korean"])
 
 
 def render_assistant_panel(settings):
@@ -814,9 +831,9 @@ def render_assistant_panel(settings):
     st.divider()
     if st.button("세션 지우기", use_container_width=True):
         st.session_state.segments = []
-        st.session_state.summary = "대화가 쌓이면 요약이 갱신됩니다."
-        st.session_state.last_translation = "영어 문장을 입력하면 한국어 문장 번역으로 표시됩니다."
-        st.session_state.last_english = "원문 영어는 여기에 함께 표시됩니다."
+        st.session_state.summary = "영작 기록이 쌓이면 핵심 표현이 요약됩니다."
+        st.session_state.last_translation = "한글 문장을 입력하면 Nature Reviews Drug Discovery 톤의 영어 문장으로 표시됩니다."
+        st.session_state.last_english = "원문 한국어는 여기에 함께 표시됩니다."
         st.session_state.live_reply_suggestion = (
             "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다."
         )
@@ -826,9 +843,9 @@ def render_assistant_panel(settings):
 
 
 def render_text_session(settings):
-    st.caption("텍스트 세션은 Streamlit 안에서 바로 번역합니다. 음성 출력은 비활성화되어 있습니다.")
+    st.caption("텍스트 세션은 한글 원문을 Nature Reviews Drug Discovery 기준의 과학 영어로 다듬습니다. 음성 출력은 비활성화되어 있습니다.")
     active_stage = "compose" if st.session_state.segments else "translate"
-    render_flow_graph(active_stage)
+    render_flow_graph(active_stage, flow="writing")
     main_col, side_col = st.columns([0.64, 0.36], gap="large")
     with main_col:
         render_live_panel(settings)

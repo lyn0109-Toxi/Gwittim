@@ -90,8 +90,18 @@ If Secrets are not configured yet, the deployed Streamlit app also lets you past
 
 The Streamlit version has two entry points:
 
-- `텍스트 세션`: translate typed English text into Korean and generate live Compose cues.
+- `텍스트 세션`: rewrite Korean drafts into polished scientific English inspired by Nature Reviews Drug Discovery and Nature Portfolio writing guidance.
 - `통역 세션`: open the realtime microphone interpreter through the local Node app or GitHub Codespaces, with text-only subtitles and live Compose cues.
+
+Text-session writing criteria:
+
+- Prefer clarity, active voice, concise sentence structure, and logical flow.
+- Make drug discovery and development writing accessible to adjacent scientific disciplines.
+- Avoid jargon-heavy phrasing, unnecessary acronyms, inflated claims, and long noun stacks.
+- Preserve technical terms, gene/protein nomenclature, dates, numbers, SI units, and drug names.
+- Use International Nonproprietary Names for drugs when possible.
+
+Live Compose cues prefer natural phrasal verbs such as `follow up`, `look into`, `walk through`, `bring up`, `point out`, `move forward`, `rule out`, `narrow down`, `set up`, `carry out`, and `circle back` when they fit the conversation.
 
 The local Node version is the realtime microphone interpreter.
 

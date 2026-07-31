@@ -108,19 +108,24 @@ async function handleTranslate(request, response) {
 
   const translated = await callGemini({
     systemInstruction: [
-      "You are Gwittim, a quiet realtime English-to-Korean conversation assistant.",
-      "Translate live English speech into natural Korean subtitles.",
-      "Return only Korean text.",
-      "Keep names, product names, technical terms, dates, and numbers precise.",
-      "If the sentence is fragmentary, translate the intended meaning briefly without adding facts.",
+      "You are Gwittim, a scientific Korean-to-English writing assistant for drug discovery and development.",
+      "Rewrite the Korean draft into polished English inspired by Nature Reviews Drug Discovery and Nature Portfolio writing guidance.",
+      "Prioritize clarity, active voice, concise sentence structure, and logical flow.",
+      "Make the writing accessible to readers in adjacent scientific disciplines without oversimplifying the science.",
+      "Avoid jargon-heavy phrasing, unnecessary acronyms, inflated claims, and long noun stacks.",
+      "Preserve technical terms, gene/protein nomenclature, drug names, dates, numbers, and SI units exactly unless the Korean clearly asks for revision.",
+      "Use International Nonproprietary Names for drugs when the input provides or implies them.",
+      "Emphasize implications and scientific meaning rather than merely describing facts.",
+      "Do not add unsupported data, citations, results, mechanisms, or regulatory claims.",
+      "Return only the polished English text.",
     ].join(" "),
     input: [
-      contextText ? `Recent context:\n${contextText}` : "",
-      `Current English utterance:\n${text}`,
+      contextText ? `Recent writing context:\n${contextText}` : "",
+      `Current Korean draft:\n${text}`,
     ]
       .filter(Boolean)
       .join("\n\n"),
-    maxOutputTokens: 220,
+    maxOutputTokens: 720,
   });
 
   sendJson(response, 200, { translation: translated.trim() });
@@ -247,6 +252,8 @@ async function handleCompose(request, response) {
       "Match the requested response mode.",
       "Return exactly two complete English sentences.",
       "Use this exact plain-text format with no Markdown: 1. <short direct sentence> 2. <slightly warmer professional sentence>",
+      "Prefer a natural phrasal verb when it is precise and appropriate, such as follow up, look into, walk through, bring up, point out, move forward, rule out, narrow down, set up, carry out, or circle back.",
+      "Do not force phrasal verbs if they would sound informal or reduce scientific precision.",
       "Do not add unsupported facts.",
     ].join(" "),
     input: [
@@ -288,6 +295,8 @@ async function handleLiveCompose(request, response) {
       "Return exactly three complete lines in plain text with no Markdown.",
       "Use this exact format: 지금 말할 수 있는 표현: 1. <short English sentence> 2. <warmer English sentence> 확인 질문: <English clarification question>",
       "Keep every English sentence compact and immediately speakable.",
+      "Prefer natural phrasal verbs for live spoken cues when they fit, especially follow up, look into, walk through, bring up, point out, move forward, rule out, narrow down, set up, carry out, and circle back.",
+      "Do not force a phrasal verb if it would make the sentence vague or too casual.",
       "Do not use contractions or apostrophes.",
     ].join(" "),
     input: [
@@ -368,14 +377,14 @@ function normalizeLiveComposeSuggestion(suggestion, mode) {
   const templates = {
     agree: [
       "지금 말할 수 있는 표현:",
-      "1. I agree that we should check the risks first.",
-      "2. That makes sense, and I would like to review the potential risks before we move forward.",
+      "1. I agree that we should look into the risks first.",
+      "2. That makes sense, and I would like to walk through the potential risks before we move forward.",
       "확인 질문: Could you clarify the main risk we should focus on?",
     ],
     disagree: [
       "지금 말할 수 있는 표현:",
-      "1. I see your point, but I would like to check the risks first.",
-      "2. I understand the plan, but I think we should review the potential risks before we decide.",
+      "1. I see your point, but I would like to look into the risks first.",
+      "2. I understand the plan, but I think we should walk through the potential risks before we decide.",
       "확인 질문: Could you explain why this timing feels safe to commit to?",
     ],
     question: [
@@ -386,8 +395,8 @@ function normalizeLiveComposeSuggestion(suggestion, mode) {
     ],
     neutral: [
       "지금 말할 수 있는 표현:",
-      "1. I understand. I would like to check the risks first.",
-      "2. That makes sense, and I would like to review the potential risks before we move forward.",
+      "1. I understand. I would like to look into the risks first.",
+      "2. That makes sense, and I would like to walk through the potential risks before we move forward.",
       "확인 질문: Could you clarify the main risk we should focus on?",
     ],
   };
