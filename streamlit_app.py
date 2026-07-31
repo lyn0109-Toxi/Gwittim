@@ -13,8 +13,8 @@ except Exception:
 
 
 APP_TITLE = "Gwittim"
-APP_MODE = "Nature Reviews Drug Discovery 톤 영작"
-DEFAULT_WRITING_RESULT = "한글 문장을 입력하면 Nature Reviews Drug Discovery 톤의 영어 문장으로 표시됩니다."
+APP_MODE = "Nature Reviews Drug Discovery 수준 영작"
+DEFAULT_WRITING_RESULT = "한글 문장을 입력하면 Nature Reviews Drug Discovery 수준의 과학 영어 문장으로 표시됩니다."
 DEFAULT_WRITING_SOURCE = "영작 원문은 기록하지 않습니다."
 DEFAULT_PAPER_ANALYSIS = "논문 텍스트나 PDF를 추가하면 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론이 여기에 표시됩니다."
 DEFAULT_MODEL = "gemini-3.6-flash"
@@ -405,8 +405,8 @@ def get_settings():
             clear_text_session_records()
 
         if active_session == "텍스트 세션":
-            st.info("Nature Reviews Drug Discovery 톤 영작")
-            st.caption("한글 원문을 과학 영어 문장으로 다듬고, 영작 기록은 저장하지 않습니다.")
+            st.info("Nature Reviews Drug Discovery 수준 영작")
+            st.caption("한글 원문을 저널 제출 수준의 과학 영어 문장으로 다듬고, 영작 기록은 저장하지 않습니다.")
         elif active_session == "번역 세션":
             st.info("논문 바로 정리")
             st.caption("논문 텍스트나 PDF에서 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론을 정리합니다.")
@@ -871,19 +871,23 @@ def maybe_refresh_live_compose(settings, mode):
 
 def translate(settings, korean_text):
     instructions = (
-        "You are Gwittim, a scientific Korean-to-English writing assistant for drug discovery and development. "
-        "Rewrite the Korean draft into polished English inspired by Nature Reviews Drug Discovery and Nature Portfolio writing guidance. "
-        "Prioritize clarity, active voice, concise sentence structure, and logical flow. "
-        "Make the writing accessible to readers in adjacent scientific disciplines without oversimplifying the science. "
-        "Avoid jargon-heavy phrasing, unnecessary acronyms, inflated claims, and long noun stacks. "
-        "Preserve technical terms, gene/protein nomenclature, drug names, dates, numbers, and SI units exactly unless the Korean clearly asks for revision. "
-        "Use International Nonproprietary Names for drugs when the input provides or implies them. "
-        "Emphasize implications and scientific meaning rather than merely describing facts. "
-        "Do not add unsupported data, citations, results, mechanisms, or regulatory claims. "
-        "Return only the polished English text."
+        "You are Gwittim, a senior scientific editor for drug discovery and development manuscripts. "
+        "Rewrite the Korean draft into publication-grade English calibrated to Nature Reviews Drug Discovery and Nature Portfolio expectations. "
+        "Target professional scientists across drug discovery, pharmacology, toxicology, translational medicine, regulatory science, and adjacent disciplines. "
+        "Make the sentence clear enough for readers outside the immediate specialty while preserving technical precision. "
+        "Prefer active voice, direct syntax, concise sentence structure, logical flow, and strong signposting. "
+        "Convert Korean-first structure into idiomatic scientific English rather than translating literally. "
+        "Unpack dense noun strings, remove filler, reduce unnecessary acronyms, and avoid jargon-heavy phrasing unless the term is field-standard. "
+        "Use careful scientific hedging: avoid overstating causality, efficacy, novelty, clinical relevance, regulatory readiness, or mechanism unless the input explicitly supports it. "
+        "Emphasize the scientific meaning, translational implication, and development relevance of the statement. "
+        "Preserve technical terms, target names, gene/protein nomenclature, assay names, endpoints, drug names, dates, numbers, statistics, and SI units exactly unless the Korean clearly asks for revision. "
+        "Use International Nonproprietary Names for drugs when the input provides or clearly implies them, and specify species or model systems when ambiguity could affect interpretation. "
+        "Do not add unsupported data, citations, mechanisms, limitations, regulatory claims, or clinical claims. "
+        "If the Korean text is fragmentary, produce the best polished manuscript sentence without inventing missing context. "
+        "Return only the polished English text, with no explanation, no bullets, and no quotation marks."
     )
     input_text = f"Current Korean draft:\n{korean_text}"
-    return call_gemini(settings, instructions, input_text, max_output_tokens=720)
+    return call_gemini(settings, instructions, input_text, max_output_tokens=1200)
 
 
 def summarize(settings):
@@ -1067,8 +1071,8 @@ def render_header(settings):
             st.write("논문 텍스트나 PDF를 읽고 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론을 바로 정리하는 번역 세션입니다.")
             st.info("현재 모드: 논문 정리. PDF는 텍스트 추출 후 분석합니다.")
         else:
-            st.write("한글 원문을 Nature Reviews Drug Discovery 톤의 과학 영어로 다듬는 텍스트 세션입니다.")
-            st.info("현재 모드: 기록 없는 한글→영문 영작. 통역 목소리는 출력하지 않습니다.")
+            st.write("한글 원문을 Nature Reviews Drug Discovery 수준의 과학 영어로 다듬는 텍스트 세션입니다.")
+            st.info("현재 모드: 기록 없는 NRDD 수준 한글→영문 영작. 통역 목소리는 출력하지 않습니다.")
     with right:
         if settings["api_key"]:
             st.info("Gemini ready")
@@ -1086,7 +1090,7 @@ def render_header(settings):
 
 
 def render_live_panel(settings):
-    st.subheader("Nature Reviews Drug Discovery 톤 영작")
+    st.subheader("Nature Reviews Drug Discovery 수준 영작")
     st.markdown(
         f"""
         <div class="gw-subtitle-card">
@@ -1103,7 +1107,7 @@ def render_live_panel(settings):
             placeholder="예: 이 후보물질은 전임상 단계에서 선택성과 안전성 측면에서 개선 가능성을 보였다.",
             height=110,
         )
-        submitted = st.form_submit_button("Nature 톤 영어로 영작", type="primary")
+        submitted = st.form_submit_button("NRDD 수준 영어로 영작", type="primary")
 
     if submitted:
         if not korean_text.strip():
@@ -1121,6 +1125,20 @@ def render_live_panel(settings):
 
 
 def render_no_record_panel():
+    st.subheader("NRDD 기준")
+    st.markdown(
+        """
+        <div class="gw-session-card">
+          <strong>저널 제출 문장에 가까운 영작</strong>
+          <p>전문가 독자를 대상으로 하되 인접 분야 연구자도 읽을 수 있게 명확성, 능동태, 간결성, 논리적 연결을 우선합니다.</p>
+          <p>과장된 novelty, 임상적 의미, 규제 가능성, 기전 설명은 원문 근거가 없으면 추가하지 않습니다.</p>
+          <p>gene/protein nomenclature, assay, endpoint, SI unit, INN drug name은 가능한 한 보존합니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
     st.subheader("기록 없는 영작")
     st.markdown(
         """
@@ -1205,7 +1223,7 @@ def render_assistant_panel(settings):
 
 
 def render_text_session(settings):
-    st.caption("텍스트 세션은 한글 원문을 Nature Reviews Drug Discovery 기준의 과학 영어로 다듬습니다. 영작 기록은 저장하지 않습니다.")
+    st.caption("텍스트 세션은 한글 원문을 Nature Reviews Drug Discovery 수준의 과학 영어로 다듬습니다. 영작 기록은 저장하지 않습니다.")
     active_stage = "compose" if st.session_state.last_translation != DEFAULT_WRITING_RESULT else "translate"
     render_flow_graph(active_stage, flow="writing")
     main_col, side_col = st.columns([0.64, 0.36], gap="large")
