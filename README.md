@@ -90,7 +90,7 @@ If Secrets are not configured yet, the deployed Streamlit app also lets you past
 
 The Streamlit version has three entry points:
 
-- `텍스트 세션`: rewrite Korean drafts into polished scientific English inspired by Nature Reviews Drug Discovery and Nature Portfolio writing guidance.
+- `텍스트 세션`: rewrite Korean drafts into polished scientific English inspired by Nature Reviews Drug Discovery and Nature Portfolio writing guidance, without keeping a writing history in the app session.
 - `번역 세션`: paste paper text or upload a PDF, then review `Abs 요약`, `섹터/섹션별 이슈`, `결과 처리`, `결론`, and follow-up questions in Korean.
 - `통역 세션`: open the realtime microphone interpreter through the local Node app or GitHub Codespaces, with text-only subtitles and live Compose cues.
 

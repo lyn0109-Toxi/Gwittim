@@ -1,7 +1,6 @@
 import os
 import re
 from io import BytesIO
-from datetime import datetime
 from html import escape
 
 import requests
@@ -15,6 +14,8 @@ except Exception:
 
 APP_TITLE = "Gwittim"
 APP_MODE = "Nature Reviews Drug Discovery 톤 영작"
+DEFAULT_WRITING_RESULT = "한글 문장을 입력하면 Nature Reviews Drug Discovery 톤의 영어 문장으로 표시됩니다."
+DEFAULT_WRITING_SOURCE = "영작 원문은 기록하지 않습니다."
 DEFAULT_PAPER_ANALYSIS = "논문 텍스트나 PDF를 추가하면 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론이 여기에 표시됩니다."
 DEFAULT_MODEL = "gemini-3.6-flash"
 PAPER_INPUT_LIMIT = 90000
@@ -67,9 +68,9 @@ st.set_page_config(
 def init_state():
     defaults = {
         "segments": [],
-        "summary": "영작 기록이 쌓이면 핵심 표현이 요약됩니다.",
-        "last_translation": "한글 문장을 입력하면 Nature Reviews Drug Discovery 톤의 영어 문장으로 표시됩니다.",
-        "last_english": "원문 한국어는 여기에 함께 표시됩니다.",
+        "summary": "대화 기록이 쌓이면 핵심 표현이 요약됩니다.",
+        "last_translation": DEFAULT_WRITING_RESULT,
+        "last_english": DEFAULT_WRITING_SOURCE,
         "live_reply_suggestion": "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다.",
         "live_reply_signature": "",
         "reply_suggestion": "추천 영어 답변이 여기에 표시됩니다.",
@@ -400,10 +401,12 @@ def get_settings():
             horizontal=True,
         )
         st.session_state.active_session = active_session
+        if active_session == "텍스트 세션":
+            clear_text_session_records()
 
         if active_session == "텍스트 세션":
             st.info("Nature Reviews Drug Discovery 톤 영작")
-            st.caption("한글 원문을 과학 영어 문장으로 다듬습니다.")
+            st.caption("한글 원문을 과학 영어 문장으로 다듬고, 영작 기록은 저장하지 않습니다.")
         elif active_session == "번역 세션":
             st.info("논문 바로 정리")
             st.caption("논문 텍스트나 PDF에서 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 결론을 정리합니다.")
@@ -879,14 +882,7 @@ def translate(settings, korean_text):
         "Do not add unsupported data, citations, results, mechanisms, or regulatory claims. "
         "Return only the polished English text."
     )
-    input_text = "\n\n".join(
-        part
-        for part in [
-            f"Recent writing context:\n{context_text()}" if st.session_state.segments else "",
-            f"Current Korean draft:\n{korean_text}",
-        ]
-        if part
-    )
+    input_text = f"Current Korean draft:\n{korean_text}"
     return call_gemini(settings, instructions, input_text, max_output_tokens=720)
 
 
@@ -926,16 +922,15 @@ def compose_reply(settings, korean_draft, mode):
     return call_gemini(settings, instructions, input_text, max_output_tokens=720)
 
 
-def add_segment(korean, english):
-    st.session_state.segments.append(
-        {
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "english": english,
-            "korean": korean,
-        }
-    )
-    st.session_state.last_english = korean
+def show_current_writing_result(english):
     st.session_state.last_translation = english
+    st.session_state.last_english = DEFAULT_WRITING_SOURCE
+
+
+def clear_text_session_records():
+    st.session_state.segments = []
+    st.session_state.summary = "대화 기록이 쌓이면 핵심 표현이 요약됩니다."
+    st.session_state.live_reply_signature = ""
 
 
 def render_brand_mark():
@@ -1073,7 +1068,7 @@ def render_header(settings):
             st.info("현재 모드: 논문 정리. PDF는 텍스트 추출 후 분석합니다.")
         else:
             st.write("한글 원문을 Nature Reviews Drug Discovery 톤의 과학 영어로 다듬는 텍스트 세션입니다.")
-            st.info("현재 모드: 한글→영문 영작. 통역 목소리는 출력하지 않습니다.")
+            st.info("현재 모드: 기록 없는 한글→영문 영작. 통역 목소리는 출력하지 않습니다.")
     with right:
         if settings["api_key"]:
             st.info("Gemini ready")
@@ -1117,20 +1112,33 @@ def render_live_panel(settings):
             with st.spinner("영작 중..."):
                 try:
                     english = translate(settings, korean_text.strip())
-                    add_segment(korean_text.strip(), english)
-                    if len(st.session_state.segments) >= 3:
-                        st.session_state.summary = summarize(settings)
+                    show_current_writing_result(english)
                     st.rerun()
                 except Exception as exc:
                     st.error(str(exc))
 
-    if st.session_state.segments:
-        st.markdown("#### Writing History")
-        for item in reversed(st.session_state.segments[-12:]):
-            with st.container(border=True):
-                st.caption(item["time"])
-                st.write(f"**{item['english']}**")
-                st.caption(item["korean"])
+    st.info("영작 기록은 저장하지 않습니다. 입력한 원문은 이전 문맥으로 재사용하지 않고, 현재 결과만 화면에 표시됩니다.")
+
+
+def render_no_record_panel():
+    st.subheader("기록 없는 영작")
+    st.markdown(
+        """
+        <div class="gw-session-card">
+          <strong>현재 세션 기록 없음</strong>
+          <p>영작 결과를 히스토리에 쌓지 않고, 원문을 요약이나 다음 영작 문맥으로 재사용하지 않습니다.</p>
+          <p>단, Gemini API 처리를 위해 입력 문장은 요청 순간 외부 API로 전송됩니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+    st.caption("화면에 남은 현재 결과도 바로 지울 수 있습니다.")
+    if st.button("현재 영작 결과 지우기", use_container_width=True):
+        st.session_state.last_translation = DEFAULT_WRITING_RESULT
+        st.session_state.last_english = DEFAULT_WRITING_SOURCE
+        st.rerun()
 
 
 def render_assistant_panel(settings):
@@ -1185,9 +1193,9 @@ def render_assistant_panel(settings):
     st.divider()
     if st.button("세션 지우기", use_container_width=True):
         st.session_state.segments = []
-        st.session_state.summary = "영작 기록이 쌓이면 핵심 표현이 요약됩니다."
-        st.session_state.last_translation = "한글 문장을 입력하면 Nature Reviews Drug Discovery 톤의 영어 문장으로 표시됩니다."
-        st.session_state.last_english = "원문 한국어는 여기에 함께 표시됩니다."
+        st.session_state.summary = "대화 기록이 쌓이면 핵심 표현이 요약됩니다."
+        st.session_state.last_translation = DEFAULT_WRITING_RESULT
+        st.session_state.last_english = DEFAULT_WRITING_SOURCE
         st.session_state.live_reply_suggestion = (
             "통역 내용이 쌓이면 지금 말할 수 있는 영어 표현을 자동으로 제안합니다."
         )
@@ -1197,14 +1205,14 @@ def render_assistant_panel(settings):
 
 
 def render_text_session(settings):
-    st.caption("텍스트 세션은 한글 원문을 Nature Reviews Drug Discovery 기준의 과학 영어로 다듬습니다. 음성 출력은 비활성화되어 있습니다.")
-    active_stage = "compose" if st.session_state.segments else "translate"
+    st.caption("텍스트 세션은 한글 원문을 Nature Reviews Drug Discovery 기준의 과학 영어로 다듬습니다. 영작 기록은 저장하지 않습니다.")
+    active_stage = "compose" if st.session_state.last_translation != DEFAULT_WRITING_RESULT else "translate"
     render_flow_graph(active_stage, flow="writing")
     main_col, side_col = st.columns([0.64, 0.36], gap="large")
     with main_col:
         render_live_panel(settings)
     with side_col:
-        render_assistant_panel(settings)
+        render_no_record_panel()
 
 
 def render_translation_session(settings):
