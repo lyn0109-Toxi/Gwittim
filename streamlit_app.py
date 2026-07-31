@@ -50,6 +50,20 @@ GEMINI_TRANSIENT_ERROR_MARKERS = [
     "overloaded",
     "rate limit",
 ]
+WRITING_DASH_REPLACEMENTS = {
+    "dose-response": "dose response",
+    "drug-like": "drug like",
+    "first-in-human": "first in human",
+    "follow-up": "follow up",
+    "high-throughput": "high throughput",
+    "in-depth": "in depth",
+    "late-stage": "late stage",
+    "non-clinical": "nonclinical",
+    "pre-clinical": "preclinical",
+    "proof-of-concept": "proof of concept",
+    "state-of-the-art": "state of the art",
+    "well-characterized": "well characterized",
+}
 LOCAL_REALTIME_URL = "http://127.0.0.1:3000"
 GITHUB_REPO_URL = "https://github.com/lyn0109-Toxi/Gwittim"
 GITHUB_CODESPACES_GUIDE_URL = (
@@ -882,12 +896,34 @@ def translate(settings, korean_text):
         "Emphasize the scientific meaning, translational implication, and development relevance of the statement. "
         "Preserve technical terms, target names, gene/protein nomenclature, assay names, endpoints, drug names, dates, numbers, statistics, and SI units exactly unless the Korean clearly asks for revision. "
         "Use International Nonproprietary Names for drugs when the input provides or clearly implies them, and specify species or model systems when ambiguity could affect interpretation. "
+        "Do not use hyphens, en dashes, or em dashes as sentence punctuation or stylistic compound modifiers. "
+        "For ranges, use 'to' rather than a dash. Rephrase with commas, parentheses, or plain spaces where needed. "
+        "Preserve a hyphen only when removing it would alter an established scientific identifier, such as PD-1, IL-6, a compound code, or a gene/protein name. "
         "Do not add unsupported data, citations, mechanisms, limitations, regulatory claims, or clinical claims. "
         "If the Korean text is fragmentary, produce the best polished manuscript sentence without inventing missing context. "
         "Return only the polished English text, with no explanation, no bullets, and no quotation marks."
     )
     input_text = f"Current Korean draft:\n{korean_text}"
-    return call_gemini(settings, instructions, input_text, max_output_tokens=1200)
+    english = call_gemini(settings, instructions, input_text, max_output_tokens=1200)
+    return remove_sentence_dashes(english)
+
+
+def remove_sentence_dashes(text):
+    cleaned = text.strip()
+    for source, target in WRITING_DASH_REPLACEMENTS.items():
+        cleaned = re.sub(re.escape(source), target, cleaned, flags=re.IGNORECASE)
+
+    cleaned = re.sub(r"(?<=\d)\s*[-‐‑‒–—]\s*(?=\d)", " to ", cleaned)
+    cleaned = re.sub(r"\s+[-‐‑‒–—]\s+", ", ", cleaned)
+    cleaned = re.sub(r"\s*[–—]\s*", ", ", cleaned)
+    previous = None
+    while previous != cleaned:
+        previous = cleaned
+        cleaned = re.sub(r"(?<=[a-z])[-‐‑‒](?=[a-z])", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:])", r"\1", cleaned)
+    cleaned = re.sub(r",\s*,+", ", ", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned.strip(" ,")
 
 
 def summarize(settings):

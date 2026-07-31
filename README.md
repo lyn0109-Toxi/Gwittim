@@ -100,6 +100,7 @@ Text-session writing criteria:
 - Make drug discovery and development writing accessible to adjacent scientific disciplines.
 - Convert Korean-first structure into idiomatic manuscript English rather than literal translation.
 - Avoid jargon-heavy phrasing, unnecessary acronyms, inflated claims, and long noun stacks.
+- Avoid hyphens or dashes as sentence punctuation or stylistic compound modifiers, except where a hyphen is part of an established scientific identifier.
 - Use careful scientific hedging and avoid unsupported novelty, mechanistic, regulatory, clinical, or efficacy claims.
 - Preserve technical terms, gene/protein nomenclature, dates, numbers, SI units, and drug names.
 - Use International Nonproprietary Names for drugs when possible.
