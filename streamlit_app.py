@@ -17,10 +17,11 @@ APP_MODE = "Nature Reviews Drug Discovery 수준 영작"
 DEFAULT_WRITING_RESULT = "한글 문장을 입력하면 Nature Reviews Drug Discovery 수준의 과학 영어 문장으로 표시됩니다."
 DEFAULT_WRITING_SOURCE = "영작 원문은 기록하지 않습니다."
 DEFAULT_VOCABULARY_REVIEW = "영작을 실행하면 핵심 어휘의 의미, 인사이트, 재검증 포인트를 다시 확인할 수 있습니다."
-DEFAULT_PAPER_ANALYSIS = "논문 텍스트나 PDF를 추가하면 Abs 요약, 섹터/섹션별 이슈, 결과 처리, 인사이트 발췌, 재검증 체크, 결론이 여기에 표시됩니다."
+DEFAULT_PAPER_ANALYSIS = "나의 목적과 논문 텍스트 또는 PDF를 추가하면 목적 매칭, Abs 요약, 섹터/섹션별 이슈, 결과 처리, 인사이트 발췌, 재검증 체크, 결론이 여기에 표시됩니다."
 DEFAULT_MODEL = "gemini-3.6-flash"
 PAPER_INPUT_LIMIT = 90000
 PAPER_REQUIRED_HEADINGS = [
+    "## 목적 매칭",
     "## Abs 요약",
     "## 섹터/섹션별 이슈",
     "## 결과 처리",
@@ -96,6 +97,8 @@ def init_state():
         "paper_source_name": "",
         "paper_source_chars": 0,
         "paper_section_count": 0,
+        "paper_user_purpose": "",
+        "paper_match_score": "",
         "paper_extraction_notice": "",
         "paper_extracted_preview": "",
         "auto_compose": True,
@@ -147,11 +150,54 @@ def inject_global_styles():
         <style>
           .stApp {
             background:
-              linear-gradient(90deg, rgba(63, 169, 232, 0.12) 1px, transparent 1px),
-              linear-gradient(0deg, rgba(63, 169, 232, 0.08) 1px, transparent 1px),
-              linear-gradient(135deg, #f8fcff 0%, #eaf8ff 44%, #f4fbff 100%);
-            background-size: 42px 42px, 42px 42px, auto;
+              linear-gradient(90deg, rgba(63, 169, 232, 0.08) 1px, transparent 1px),
+              linear-gradient(0deg, rgba(63, 169, 232, 0.055) 1px, transparent 1px),
+              linear-gradient(135deg, #fbfdff 0%, #edf8ff 46%, #f7fcff 100%);
+            background-size: 48px 48px, 48px 48px, auto;
             color: #10243d;
+            font-size: 14px;
+          }
+          .block-container {
+            padding-top: 1.4rem;
+            padding-bottom: 2.2rem;
+            max-width: 1220px;
+          }
+          div[data-testid="stMarkdownContainer"] p,
+          div[data-testid="stMarkdownContainer"] li,
+          div[data-testid="stMarkdownContainer"] td,
+          div[data-testid="stMarkdownContainer"] th {
+            font-size: .9rem;
+            line-height: 1.55;
+          }
+          div[data-testid="stMarkdownContainer"] h1 {
+            font-size: 1.45rem;
+            line-height: 1.25;
+            margin: .45rem 0 .35rem;
+          }
+          div[data-testid="stMarkdownContainer"] h2 {
+            font-size: 1.18rem;
+            line-height: 1.3;
+            margin: 1rem 0 .35rem;
+          }
+          div[data-testid="stMarkdownContainer"] h3 {
+            font-size: 1rem;
+            line-height: 1.35;
+            margin: .9rem 0 .35rem;
+          }
+          div[data-testid="stMarkdownContainer"] table {
+            font-size: .84rem;
+            line-height: 1.45;
+            border-collapse: collapse;
+          }
+          div[data-testid="stMarkdownContainer"] th,
+          div[data-testid="stMarkdownContainer"] td {
+            padding: .42rem .5rem;
+            vertical-align: top;
+          }
+          textarea,
+          input,
+          .stTextInput input {
+            font-size: .9rem !important;
           }
           section[data-testid="stSidebar"] {
             background: rgba(255, 255, 255, 0.88);
@@ -160,28 +206,28 @@ def inject_global_styles():
           }
           div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: rgba(123, 190, 234, 0.32);
-            background: rgba(255, 255, 255, 0.72);
-            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
+            background: rgba(255, 255, 255, 0.78);
+            box-shadow: 0 8px 22px rgba(64, 146, 207, 0.075);
           }
           .gw-brand {
             display: grid;
-            grid-template-columns: 48px minmax(0, 1fr);
-            gap: 14px;
+            grid-template-columns: 42px minmax(0, 1fr);
+            gap: 12px;
             align-items: center;
-            margin: 4px 0 10px;
+            margin: 2px 0 8px;
           }
           .gw-brand-mark {
-            width: 48px;
-            height: 48px;
+            width: 42px;
+            height: 42px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             align-items: end;
             gap: 4px;
-            padding: 8px;
+            padding: 7px;
             border: 1px solid rgba(63, 169, 232, 0.42);
             border-radius: 8px;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(230, 247, 255, 0.9));
-            box-shadow: 0 12px 30px rgba(39, 143, 214, 0.18);
+            box-shadow: 0 8px 20px rgba(39, 143, 214, 0.14);
           }
           .gw-brand-mark span {
             display: block;
@@ -210,35 +256,35 @@ def inject_global_styles():
             display: block;
             margin-top: 2px;
             color: #10243d;
-            font-size: 1.5rem;
+            font-size: 1.26rem;
             line-height: 1.18;
           }
           .gw-flow {
             display: grid;
             grid-template-columns: minmax(120px, 1fr) 42px minmax(120px, 1fr) 42px minmax(120px, 1fr) minmax(120px, .8fr);
-            gap: 10px;
+            gap: 8px;
             align-items: center;
-            margin: 16px 0 20px;
-            padding: 12px;
+            margin: 12px 0 14px;
+            padding: 10px;
             border: 1px solid rgba(123, 190, 234, 0.4);
             border-radius: 8px;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(231, 247, 255, 0.76));
-            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
+            box-shadow: 0 8px 22px rgba(64, 146, 207, 0.075);
             backdrop-filter: blur(18px);
           }
           .gw-flow-step {
-            min-height: 70px;
+            min-height: 58px;
             display: grid;
             align-content: center;
-            gap: 5px;
-            padding: 12px;
+            gap: 3px;
+            padding: 10px;
             border-left: 4px solid rgba(123, 190, 234, 0.4);
             background: rgba(255, 255, 255, 0.62);
           }
           .gw-flow-step.is-active {
             border-left-color: #1da9e8;
             background: #e6f7ff;
-            box-shadow: inset 0 0 0 1px rgba(29, 169, 232, 0.12), 0 10px 26px rgba(29, 169, 232, 0.14);
+            box-shadow: inset 0 0 0 1px rgba(29, 169, 232, 0.12), 0 8px 18px rgba(29, 169, 232, 0.12);
           }
           .gw-flow-step span {
             color: #5e758f;
@@ -246,7 +292,7 @@ def inject_global_styles():
             font-weight: 900;
           }
           .gw-flow-step strong {
-            font-size: .98rem;
+            font-size: .9rem;
             color: #10243d;
           }
           .gw-flow-line {
@@ -254,7 +300,7 @@ def inject_global_styles():
             background: linear-gradient(90deg, rgba(37, 99, 235, .2), rgba(18, 191, 213, .56), rgba(59, 214, 198, .24));
           }
           .gw-meter {
-            height: 70px;
+            height: 58px;
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             align-items: end;
@@ -276,21 +322,24 @@ def inject_global_styles():
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 10px;
-            margin: 4px 0 18px;
+            margin: 4px 0 14px;
           }
           .gw-kpi-grid.gw-kpi-grid-four {
             grid-template-columns: repeat(4, minmax(0, 1fr));
           }
+          .gw-kpi-grid.gw-kpi-grid-five {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+          }
           .gw-kpi {
-            min-height: 78px;
+            min-height: 66px;
             display: grid;
             align-content: center;
             gap: 4px;
-            padding: 14px;
+            padding: 11px;
             border: 1px solid rgba(123, 190, 234, 0.32);
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.74);
-            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
+            box-shadow: 0 8px 20px rgba(64, 146, 207, 0.075);
           }
           .gw-kpi span {
             color: #5e758f;
@@ -299,7 +348,7 @@ def inject_global_styles():
           }
           .gw-kpi strong {
             color: #10243d;
-            font-size: 1.12rem;
+            font-size: .98rem;
           }
           .gw-live-card {
             margin: 10px 0 16px;
@@ -323,15 +372,16 @@ def inject_global_styles():
             white-space: pre-wrap;
             word-break: break-word;
             font-family: inherit;
+            font-size: .9rem;
             line-height: 1.48;
           }
           .gw-session-card {
-            min-height: 130px;
-            padding: 16px;
+            min-height: 112px;
+            padding: 13px;
             border: 1px solid rgba(123, 190, 234, 0.32);
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.74);
-            box-shadow: 0 12px 32px rgba(64, 146, 207, 0.1);
+            box-shadow: 0 8px 20px rgba(64, 146, 207, 0.075);
           }
           .gw-subtitle-card {
             border: 1px solid rgba(123, 190, 234, 0.32);
@@ -339,22 +389,23 @@ def inject_global_styles():
             background:
               linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(226, 246, 255, 0.62)),
               repeating-linear-gradient(90deg, rgba(63, 169, 232, 0.08) 0, rgba(63, 169, 232, 0.08) 1px, transparent 1px, transparent 18px);
-            padding: 28px 30px;
-            margin-bottom: 12px;
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 12px 32px rgba(64, 146, 207, 0.1);
+            padding: 20px 22px;
+            margin-bottom: 10px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 8px 20px rgba(64, 146, 207, 0.075);
           }
           .gw-subtitle-card strong {
             display: block;
             color: #10243d;
-            font-size: 2.1rem;
+            font-size: 1.45rem;
             font-weight: 850;
-            line-height: 1.25;
+            line-height: 1.32;
             word-break: break-word;
           }
           .gw-subtitle-card span {
             display: block;
             margin-top: 14px;
             color: #5e758f;
+            font-size: .9rem;
             line-height: 1.5;
             word-break: break-word;
           }
@@ -710,6 +761,16 @@ def normalize_paper_analysis_output(analysis, source_chars, section_count):
     return text
 
 
+def extract_purpose_match_score(analysis):
+    match = re.search(r"목적\s*매칭\s*점수\s*[:：]\s*(\d{1,3})\s*/\s*100", analysis)
+    if not match:
+        match = re.search(r"목적\s*매칭\s*점수\s*[:：]\s*(\d{1,3})\s*점", analysis)
+    if not match:
+        return ""
+    score = max(0, min(100, int(match.group(1))))
+    return f"{score}/100"
+
+
 def paper_depth_instruction(depth):
     if depth == "빠른":
         return "Keep the answer compact: 2 to 4 bullets per section and at least 4 issue rows if evidence is available."
@@ -718,12 +779,13 @@ def paper_depth_instruction(depth):
     return "Write a detailed review: 5 to 8 bullets per section and at least 8 issue rows if evidence is available. Include concrete evidence, endpoints, models, numbers, and limitations whenever present."
 
 
-def analyze_paper(settings, paper_text, source_name, depth="상세"):
+def analyze_paper(settings, paper_text, source_name, depth="상세", user_purpose=""):
     normalized_text = normalize_paper_text(paper_text)
     sections = extract_paper_sections(normalized_text)
     section_digest = build_section_digest(sections)
     compact_text = truncate_text(normalized_text, PAPER_INPUT_LIMIT)
     section_count = len(sections)
+    purpose_text = user_purpose.strip()
     instructions = (
         "You are Gwittim, a scientific paper translation and analysis assistant for Korean readers in drug discovery, toxicology, regulatory science, and pharmaceutical development. "
         "Analyze the supplied paper text in Korean with enough detail for a scientist to decide what to read next. "
@@ -735,10 +797,15 @@ def analyze_paper(settings, paper_text, source_name, depth="상세"):
         "Extract insights only from the inspected text. Separate direct observations from interpretation. "
         "For each insight, cite the supporting section or exact source phrase in Korean summary form and assign confidence as 높음, 중간, or 낮음. "
         "Add a revalidation checklist for claims, numbers, endpoints, figures, tables, statistical signals, translational implications, limitations, and any conclusion that could change after checking the original paper. "
+        "If a Korean user purpose is provided, compare it with the paper's apparent research objective, model, endpoint, modality, development stage, and practical use. "
+        "Calculate a purpose match score from 0 to 100. Use 80 to 100 only for direct alignment, 60 to 79 for partial but useful alignment, 40 to 59 for broad topical overlap, and below 40 for weak alignment. "
+        "List concrete matching points and mismatches. Cite the paper section or source phrase that supports each point. "
+        "If the user purpose is not provided, write 목적 매칭 점수: 미입력 and ask the user to add a purpose. "
         "If a point cannot be verified from the supplied text, label it 근거 부족 rather than filling the gap. "
         "Use clear Korean, but keep essential scientific terms in English in parentheses when helpful. "
         f"{paper_depth_instruction(depth)} "
         "Return only this Markdown structure and use every heading: "
+        "## 목적 매칭 "
         "## Abs 요약 "
         "## 섹터/섹션별 이슈 "
         "## 결과 처리 "
@@ -750,9 +817,11 @@ def analyze_paper(settings, paper_text, source_name, depth="상세"):
     input_text = "\n\n".join(
         [
             f"Source name: {source_name or 'pasted text'}",
+            f"User purpose in Korean:\n{purpose_text or '미입력'}",
             f"Analysis depth: {depth}",
             f"Detected section count: {section_count}",
             "Required output format:",
+            "## 목적 매칭\n목적 매칭 점수: <0-100>/100 또는 미입력\n| 매칭 포인트 | 논문 근거/섹션 | 나의 목적과 연결 | 재검증 필요성 |",
             "## Abs 요약\n- 연구 질문\n- 배경/미충족 수요\n- 접근법\n- 핵심 결과\n- 의미\n- 한계",
             "## 섹터/섹션별 이슈\n| 섹터/섹션 | 핵심 주장/결과 | 근거 | 이슈/한계 | 확인할 포인트 |",
             "## 결과 처리\n- 주요 결과가 어떤 실험/분석/비교로 도출됐는지\n- 통계/정량값/endpoint가 어떻게 해석되는지\n- 표/그림에서 확인해야 할 부분\n- 과잉 해석 위험",
@@ -764,7 +833,7 @@ def analyze_paper(settings, paper_text, source_name, depth="상세"):
             f"Full paper text excerpt:\n{compact_text}",
         ]
     )
-    raw_analysis = call_gemini(settings, instructions, input_text, max_output_tokens=7200)
+    raw_analysis = call_gemini(settings, instructions, input_text, max_output_tokens=7600)
     return normalize_paper_analysis_output(raw_analysis, len(normalized_text), section_count)
 
 
@@ -1119,9 +1188,10 @@ def render_paper_metrics(status):
     source_name = st.session_state.paper_source_name or "대기"
     source_chars = st.session_state.paper_source_chars
     section_count = st.session_state.paper_section_count
+    match_score = st.session_state.paper_match_score or "대기"
     st.markdown(
         f"""
-        <div class="gw-kpi-grid gw-kpi-grid-four">
+        <div class="gw-kpi-grid gw-kpi-grid-five">
           <div class="gw-kpi">
             <span>논문</span>
             <strong>{escape(source_name[:24])}</strong>
@@ -1133,6 +1203,10 @@ def render_paper_metrics(status):
           <div class="gw-kpi">
             <span>감지 섹션</span>
             <strong>{section_count}</strong>
+          </div>
+          <div class="gw-kpi">
+            <span>목적 매칭</span>
+            <strong>{escape(match_score)}</strong>
           </div>
           <div class="gw-kpi">
             <span>상태</span>
@@ -1357,6 +1431,11 @@ def render_translation_session(settings):
     input_col, result_col = st.columns([0.44, 0.56], gap="large")
     with input_col:
         st.subheader("논문 추가")
+        user_purpose = st.text_area(
+            "나의 목적",
+            placeholder="예: 이 논문이 내 후보물질의 전임상 독성 평가 전략 수립에 얼마나 직접적으로 도움이 되는지 확인하고 싶습니다.",
+            height=96,
+        )
         uploaded_pdf = st.file_uploader("PDF 업로드", type=["pdf"])
         analysis_depth = st.radio(
             "정리 깊이",
@@ -1395,12 +1474,15 @@ def render_translation_session(settings):
                                 normalized_text,
                                 source_name,
                                 analysis_depth,
+                                user_purpose,
                             )
                         if not analysis.strip():
                             raise RuntimeError("논문 분석 결과를 받지 못했습니다. 입력 텍스트를 조금 더 길게 넣어 다시 시도해주세요.")
                         st.session_state.paper_source_name = source_name
                         st.session_state.paper_source_chars = len(normalized_text)
                         st.session_state.paper_section_count = len(sections)
+                        st.session_state.paper_user_purpose = user_purpose.strip()
+                        st.session_state.paper_match_score = extract_purpose_match_score(analysis)
                         st.session_state.paper_extraction_notice = paper_extraction_notice(
                             len(normalized_text),
                             len(sections),
@@ -1417,6 +1499,8 @@ def render_translation_session(settings):
             st.session_state.paper_source_name = ""
             st.session_state.paper_source_chars = 0
             st.session_state.paper_section_count = 0
+            st.session_state.paper_user_purpose = ""
+            st.session_state.paper_match_score = ""
             st.session_state.paper_extraction_notice = ""
             st.session_state.paper_extracted_preview = ""
             st.rerun()
